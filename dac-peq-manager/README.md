@@ -5,6 +5,14 @@
 [![Hardware: KTMicro KT02H20](https://img.shields.io/badge/SoC-KTMicro%20KT02H20-orange.svg)](#hardware-support-matrix)
 [![Host DSP: PipeWire & Wavelet](https://img.shields.io/badge/DSP-PipeWire%20%7C%20Wavelet%20%7C%20EqualizerAPO-purple.svg)](#host-side-dsp-suite)
 
+<p align="center">
+  <a href="https://johnnyguerra.github.io/dac-peq-manager/">
+    <img src="../media/dac-peq-web-flasher-demo.gif" alt="dac-peq-manager Web Flasher Demo" width="850">
+  </a>
+  <br>
+  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or burn to hardware NVRAM in &lt;50ms.</em>
+</p>
+
 A modular command-line tool, hardware DSP configuration suite, and host-side equalizer bridge that manages 5-band Parametric EQ (PEQ) across portable USB-C DACs and Tribrid In-Ear Monitors (IEMs).
 
 ---

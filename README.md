@@ -8,6 +8,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Hardware Support Matrix](https://img.shields.io/badge/Hardware%20Matrix-35%20DACs-orange.svg?style=flat-square)](./COMPATIBILITY.md)
 
+<p align="center">
+  <a href="https://johnnyguerra.github.io/dac-peq-manager/">
+    <img src="media/dac-peq-web-flasher-demo.gif" alt="dac-peq-manager Web Flasher Demo" width="850">
+  </a>
+  <br>
+  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or burn to hardware NVRAM in &lt;50ms.</em>
+</p>
+
 An open-source hardware DSP flashing suite, WebHID browser flasher, and host equalizer bridge for portable USB-C DAC dongles, DSP upgrade cables, and In-Ear Monitors (IEMs).
 
 Burn custom Parametric EQ profiles (including **AutoEq** targets from squig.link) directly into onboard non-volatile hardware memory (NVRAM). Settings persist natively across **iPhones, Android, Macs, Windows, Linux PCs, iPads, and gaming consoles** without running any background apps.
@@ -25,6 +33,28 @@ Run the full hardware flasher directly in your browser via WebHID (Chrome, Brave
 * AutoEq Database Integration (search over 5,000+ headphone & IEM measurements).
 * 2-Way Hardware Readback & Live Audition in RAM before burning to flash.
 * Built-in Safety Guardrails: NVRAM Flash Wear-Out Tracker & Conexant fixed mask ROM protection.
+
+---
+
+## 📸 Architecture & Feature Slides
+
+<details open>
+<summary><b>Click to preview presentation & feature slides (5-Slide Infographic Deck)</b></summary>
+<br>
+
+| Slide 1: Overview & Value Proposition | Slide 2: The Status Quo vs Open Source |
+| :---: | :---: |
+| <a href="media/slides/slide_1.png"><img src="media/slides/slide_1.png" alt="Slide 1: Overview" width="440"></a> | <a href="media/slides/slide_2.png"><img src="media/slides/slide_2.png" alt="Slide 2: Comparison" width="440"></a> |
+
+| Slide 3: Web Flasher UI & Biquad Curve | Slide 4: Multi-Tier Hardware Protections |
+| :---: | :---: |
+| <a href="media/slides/slide_3.png"><img src="media/slides/slide_3.png" alt="Slide 3: Web Flasher UI" width="440"></a> | <a href="media/slides/slide_4.png"><img src="media/slides/slide_4.png" alt="Slide 4: Hardware Safety" width="440"></a> |
+
+<p align="center">
+  <b>Slide 5: Hardware Compatibility & Universal Portability</b><br>
+  <a href="media/slides/slide_5.png"><img src="media/slides/slide_5.png" alt="Slide 5: Compatibility" width="680"></a>
+</p>
+</details>
 
 ---
 
