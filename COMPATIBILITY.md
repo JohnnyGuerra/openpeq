@@ -24,6 +24,7 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **Allegro Mini** | Kiwi Ears | KTMicro KT02H20 / CB1200AU | `0x31B2:0x0111` | 5 Bands | Slot 3 (Custom) | 🟢 | Dual 3.5mm SE + 4.4mm Bal. 3.5mm TRRS mic capture verified (24-bit/384kHz). Physical Vol+ (~240Ω) & Vol- (~470Ω) buttons work natively. Center Button (Play/Pause) on standard 0Ω dead-short CTIA cables transmits `[0x01, 0x00]` because KT02H20 FW v1.0.1 (Jun 22 2024) ADC comparator treats 0.00V as idle/line-ground release rather than Button A. Confirmed by Kiwi Ears support that this will not be updated on current hardware revision. Fully supported via Linux `dac-peq` user-space bridge. |
 | **FreeDSP / May Cable** | Moondrop | Moondrop Custom 9-Band DSP | `0x31B2:0x0112` | 9 Bands | Slot 1 | 🟢 | 0.78mm 2-pin modular Type-C cable. 9-band hardware biquad with live readback. |
 | **BmasterX 6 Plug** | BASN | OEM KTMicro / WalkPlay DSP | `0x31B2:0x0111` | 5 Bands | Slot 3 (Custom) | 🟢 | Modular Type-C termination for BASN 1DD+3BA+2PZT Tribrid IEM. |
+| **Wan'er S.G II Red Lion** | TANGZU | KTMicro KT02H20 | `0x31B2:0x0111` | 5 Bands | Slot 3 | 🟢 | Confirmed working in the wild by r/chifi community tester demomanca. 0.78mm 2-pin Type-C cable with onboard KT02H20 hardware PEQ. |
 | **JadeAudio JA11** | FiiO / JadeAudio | KTMicro KT02H20 | `0x2972:0x0102` | 5 Bands | Slot 3 | 🟡 | 3.5mm SE dongle with FIR filter selection (FAST-LL, SLOW, NON-OS). Firmware v1.8+ uses native clocking. |
 | **JM12** | JCALLY | KTMicro KT02H20 | `0x31B2:0x0111` | 5 Bands | Slot 3 | 🟡 | Budget 3.5mm SE dongle. Protocol identical to Allegro Mini. |
 | **Allegro Pro** | Kiwi Ears | KTMicro KT_3016L | `0x31B2:0x3016` | 5 Bands | Slot 3 | 🟡 | Dual 3.5mm + 4.4mm balanced high-output dongle. Register layout mapped. |
@@ -45,6 +46,7 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **BTR13** | FiiO | Dual CS43131 + QCC5125 | `0x2972:0x0106` | 10 Bands | USER1-3 | 🔵 | Bluetooth 5.1 + USB DAC with independent hardware PEQ. |
 | **BTR17** | FiiO | Dual ES9069Q + THX AAA 78+ | `0x2972` | 10 Bands | USER1-10 | 🔵 | Flagship Bluetooth / USB DAC with aptX Lossless and LDAC. |
 | **5K Reference** | Qudelix | Dual ES9218P + QCC5124 | `0x04DD:0x1001` | 20 Bands | 20 Presets | 🔵 | Wireless & USB DAC with 20 onboard memory slots. Qudelix serial HID protocol. |
+| **Protocol Micro** | CrinEar / Hangout.audio | Modified SPV4040 | TBD (Hangout WebHID) | 8 Bands | Multi | 🔵 | Crinacle ultra-budget $9.99 dongle with 8-band hardware PEQ (EQ.Hangout.Audio). Packet capture requested from r/chifi community. |
 
 ---
 

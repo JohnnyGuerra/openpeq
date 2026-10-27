@@ -38,6 +38,7 @@ A modular command-line tool, hardware DSP configuration suite, and host-side equ
 | Device | Chipset / Architecture | USB VID:PID | DSP Capability | Managed By |
 | :--- | :--- | :--- | :--- | :--- |
 | **Kiwi Ears Allegro Mini** | KTMicro `KT02H20` / `CB1200AU` | `0x31B2:0x0111` | 5-Band Hardware Biquad PEQ + Preamp in NVRAM | `dac-peq-manager apply / flash` |
+| **TANGZU Wan'er S.G II Cable** | KTMicro `KT02H20` | `0x31B2:0x0111` | 5-Band Hardware Biquad PEQ in NVRAM | `dac-peq-manager apply / flash` |
 | **BASN BmasterX 6 Modular Type-C DSP Plug** | OEM KTMicro / WalkPlay DSP Termination | Dynamic HID Scan | 5-Band Hardware Biquad PEQ in NVRAM | `dac-peq-manager apply / flash` |
 | **FiiO / JadeAudio JA11** | KTMicro `KT02H20` | `0x2972:0x0102` | 5-Band Hardware Biquad PEQ in NVRAM | `dac-peq-manager apply / flash` |
 | **JCALLY JM6 Pro** | Conexant `CX31993` + `MAX97220` | `0x0572:0x1B08` | Fixed 32-bit/384kHz UAC2 (No onboard flash) | `dac-peq-manager export-pipewire / export-apo` |
