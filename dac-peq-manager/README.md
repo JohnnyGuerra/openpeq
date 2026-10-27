@@ -455,3 +455,23 @@ The `web/` directory can also be deployed directly to **GitHub Pages** with zero
 > [!CAUTION]
 > **Use at your own risk.** Writing to hardware non-volatile flash memory (NVRAM) involves inherent physical risks. Never disconnect the USB-C cable or power down the host device while executing a `flash` command. The authors and contributors of `dac-peq-manager` assume no liability for damaged or bricked audio hardware.
 
+---
+
+## 11. Citation & Attribution
+
+If you use `dac-peq-manager`, its reverse-engineered KTMicro/WalkPlay USB register maps, or the `dac-peq-core` Rust engine in your own project, fork, or research, please provide attribution:
+
+```text
+Guerra, J. (2026). dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs.
+GitHub: https://github.com/JohnnyGuerra/dac-peq-manager
+```
+
+```bibtex
+@software{guerra2026dacpeq,
+  author = {Johnny Guerra},
+  title = {dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs},
+  url = {https://github.com/JohnnyGuerra/dac-peq-manager},
+  year = {2026}
+}
+```
+

@@ -140,3 +140,23 @@ We need your help testing devices and capturing USB packets!
 
 * **License:** [MIT License](./LICENSE)
 * **Disclaimer:** `dac-peq-manager` is an independent, community-driven open-source project. Not affiliated with KTMicro, Kiwi Ears, FiiO, Moondrop, Tanchjim, or Truthear.
+
+---
+
+## ✒️ Citation & Attribution
+
+If you use `dac-peq-manager`, its reverse-engineered KTMicro/WalkPlay USB register maps, or the `dac-peq-core` Rust engine in your own project, fork, or research, please provide attribution:
+
+```text
+Guerra, J. (2026). dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs.
+GitHub: https://github.com/JohnnyGuerra/dac-peq-manager
+```
+
+```bibtex
+@software{guerra2026dacpeq,
+  author = {Johnny Guerra},
+  title = {dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs},
+  url = {https://github.com/JohnnyGuerra/dac-peq-manager},
+  year = {2026}
+}
+```

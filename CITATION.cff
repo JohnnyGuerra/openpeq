@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Guerra"
+    given-names: "Johnny"
+title: "dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs"
+version: 0.2.0
+date-released: 2026-10-24
+url: "https://github.com/JohnnyGuerra/dac-peq-manager"
+repository-code: "https://github.com/JohnnyGuerra/dac-peq-manager"
+license: MIT
+keywords:
+  - dac
+  - peq
+  - parametric-eq
+  - webhid
+  - ktmicro
+  - rust
+  - webassembly
+  - audiophile
+  - iem
+  - kiwi-ears
+  - moondrop
