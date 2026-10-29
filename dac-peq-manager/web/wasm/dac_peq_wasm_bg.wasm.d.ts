@@ -11,6 +11,7 @@ export const decimate_bands_json: (a: number, b: number, c: number, d: number, e
 export const encode_factory_reset_report: () => any;
 export const encode_ktmicro_payload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
 export const encode_nvram_commit_report: () => any;
+export const encode_walkplay_payload: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const export_apo_txt: (a: number, b: number) => [number, number, number, number];
 export const export_pipewire_conf: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const export_wavelet_txt: (a: number, b: number) => [number, number, number, number];

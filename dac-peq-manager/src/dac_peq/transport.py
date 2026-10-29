@@ -86,5 +86,9 @@ def get_dsp_device(
         from dac_peq.moondrop import MoondropFreeDSPDevice
         return MoondropFreeDSPDevice(vendor_id, product_id, path, use_mock)
 
+    if vendor_id == 0x3302 and product_id in (0xC20F, 0x43CC):
+        from dac_peq.walkplay_hid import WalkPlayDSPDevice
+        return WalkPlayDSPDevice(vendor_id, product_id, path, use_mock)
+
     from dac_peq.ktmicro_hid import KTMicroDSPDevice
     return KTMicroDSPDevice(vendor_id, product_id, path, use_mock)

@@ -24,14 +24,19 @@ import {
 import {
   KTMICRO_FILTERS,
   isMoondropFreeDsp,
+  isWalkplayDsp,
   getFlashStats,
   recordFlashCommit,
   detectFirmwareQuirks,
   encodeKtMicroBandPackets,
   encodeMoondropReport,
+  encodeWalkplayFilterPacket,
+  encodeWalkplayGlobalGain,
+  getWalkplayCommitSequence,
   waitForUsbReenumeration,
   readKtMicroPeq,
   readMoondropReport,
+  readWalkplayPeq,
   getStockBackup,
   saveStockBackup,
   hasStockBackup,
@@ -450,7 +455,8 @@ function updateFlashCounterBadge(dev) {
 
 // ── WebHID Hardware Lifecycle ─────────────────────────────────────────────────
 function setHardwareBandArchitecture(bandCount) {
-  activeHardwareBands = bandCount === 9 ? 9 : 5;
+  const count = parseInt(bandCount, 10);
+  activeHardwareBands = [5, 8, 9, 10].includes(count) ? count : 5;
   const selHwBands = document.getElementById("selHardwareBandCount");
   if (selHwBands) selHwBands.value = String(activeHardwareBands);
   const lblTitle = document.getElementById("lblMatrixTitle");
@@ -483,8 +489,11 @@ async function initializeDevice(dev, isSilent = false) {
 
     updateFlashCounterBadge(dev);
 
-    // Switch between 9-band Moondrop FreeDSP vs 5-band KTMicro KT02H20
-    if (isMoondropFreeDsp(dev) || (dacMatch && dacMatch.architecture === "moondrop_dsp")) {
+    // Switch hardware band architecture
+    if (isWalkplayDsp(dev) || (dacMatch && dacMatch.architecture === "walkplay_dsp")) {
+      const hwBands = (dacMatch && dacMatch.hardware_bands) ? dacMatch.hardware_bands : (dev.productId === 0x43cc ? 10 : 8);
+      setHardwareBandArchitecture(hwBands);
+    } else if (isMoondropFreeDsp(dev) || (dacMatch && dacMatch.architecture === "moondrop_dsp")) {
       setHardwareBandArchitecture(9);
     } else if (activeHardwareBands !== 5) {
       setHardwareBandArchitecture(5);
@@ -645,8 +654,11 @@ async function applyToDevice(commitFlash = false) {
       try {
         const quirks = detectFirmwareQuirks(connectedHidDevice);
         const isMoondrop = activeHardwareBands === 9 || isMoondropFreeDsp(connectedHidDevice);
+        const isWalkplay = activeHardwareBands === 8 || activeHardwareBands === 10 || isWalkplayDsp(connectedHidDevice);
         let currentDacState;
-        if (isMoondrop) {
+        if (isWalkplay) {
+          currentDacState = await readWalkplayPeq(connectedHidDevice, activeHardwareBands, 600);
+        } else if (isMoondrop) {
           currentDacState = await readMoondropReport(connectedHidDevice, 300);
         } else {
           currentDacState = await readKtMicroPeq(connectedHidDevice, quirks.requiresCompensate2X);
@@ -664,7 +676,48 @@ async function applyToDevice(commitFlash = false) {
   }
 
   try {
-    // Branch 1: Moondrop FreeDSP 9-Band Protocol
+    // Branch 1: WalkPlay Scheme 11 (8-Band) & Scheme 16 (10-Band) Protocol
+    if (activeHardwareBands === 8 || activeHardwareBands === 10 || isWalkplayDsp(connectedHidDevice)) {
+      const bandCount = activeHardwareBands;
+      const slot = 101; // Walkplay default user preset slot
+      for (let i = 0; i < bandCount; i++) {
+        const b = currentPreset.bands[i] || { type: "PK", freq: 1000, gain: 0, q: 1.0 };
+        const pkt = encodeWalkplayFilterPacket(i, b.freq, b.gain, b.q, b.type, slot);
+        if (isDemoMode) {
+          console.log(`[Demo Mode WalkPlay Filter ${i} Tx]:`, pkt);
+        } else {
+          await connectedHidDevice.sendReport(0x4b, pkt);
+          await new Promise((r) => setTimeout(r, 20));
+        }
+      }
+
+      // Write global preamp
+      const gainPkt = encodeWalkplayGlobalGain(currentPreset.preamp || 0.0);
+      if (isDemoMode) {
+        console.log("[Demo Mode WalkPlay Preamp Tx]:", gainPkt);
+      } else {
+        await connectedHidDevice.sendReport(0x4b, gainPkt);
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
+      if (commitFlash) {
+        const seq = getWalkplayCommitSequence();
+        for (const cmd of seq) {
+          if (!isDemoMode) {
+            await connectedHidDevice.sendReport(0x4b, cmd);
+            await new Promise((r) => setTimeout(r, 25));
+          }
+        }
+        const stats = recordFlashCommit(connectedHidDevice);
+        updateFlashCounterBadge(connectedHidDevice);
+        showToast(`${bandCount}-Band PEQ burned to WalkPlay flash (Burn #${stats.total})!`);
+      } else {
+        showToast(`${bandCount}-Band PEQ written to WalkPlay live DSP RAM!`);
+      }
+      return;
+    }
+
+    // Branch 2: Moondrop FreeDSP 9-Band Protocol
     if (activeHardwareBands === 9 || isMoondropFreeDsp(connectedHidDevice)) {
       const payload = encodeMoondropReport(currentPreset.bands, currentPreset.preamp, commitFlash);
       if (isDemoMode) {
@@ -763,8 +816,21 @@ async function readFromDevice(silent = false) {
   try {
     if (!silent) showToast("Reading registers from hardware DSP...");
     const isMoondrop = activeHardwareBands === 9 || isMoondropFreeDsp(connectedHidDevice);
+    const isWalkplay = activeHardwareBands === 8 || activeHardwareBands === 10 || isWalkplayDsp(connectedHidDevice);
 
-    if (isMoondrop) {
+    if (isWalkplay) {
+      const res = await readWalkplayPeq(connectedHidDevice, activeHardwareBands);
+      if (res && res.bands && res.bands.length > 0) {
+        currentPreset.preamp = res.preamp;
+        currentPreset.bands = res.bands;
+        saveStockBackup(connectedHidDevice, 101, res);
+        const btnRestore = document.getElementById("btnRestoreStock");
+        if (btnRestore) btnRestore.style.display = "inline-flex";
+        buildControlsUI();
+        renderCurve();
+        if (!silent) showToast(`Successfully read ${res.bands.length} bands from WalkPlay DSP!`);
+      }
+    } else if (isMoondrop) {
       const res = await readMoondropReport(connectedHidDevice);
       if (res && res.bands && res.bands.length > 0) {
         currentPreset.preamp = res.preamp;
@@ -1707,7 +1773,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (btnRestore && connectedHidDevice) {
       btnRestore.style.display = hasStockBackup(connectedHidDevice, slotId) ? "inline-flex" : "none";
     }
-    if (connectedHidDevice && !isDemoMode && !isMoondropFreeDsp(connectedHidDevice)) {
+    if (connectedHidDevice && !isDemoMode && !isMoondropFreeDsp(connectedHidDevice) && !isWalkplayDsp(connectedHidDevice)) {
       try {
         await sendHidReport(0x4b, 0x24, 0x57, slotId & 0xff, 0, 0, 0);
         showToast(`Hardware switched to Slot ${slotId}. Reading slot registers...`);

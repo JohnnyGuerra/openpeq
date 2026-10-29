@@ -21,6 +21,8 @@ export function encode_ktmicro_payload(preset_json: string, vid: number, pid: nu
 
 export function encode_nvram_commit_report(): Uint8Array;
 
+export function encode_walkplay_payload(preset_json: string, slot_id: number, commit_flash: boolean): Array<any>;
+
 export function export_apo_txt(preset_json: string): string;
 
 export function export_pipewire_conf(preset_json: string, sink_target?: string | null): string;
@@ -43,6 +45,7 @@ export interface InitOutput {
     readonly encode_factory_reset_report: () => any;
     readonly encode_ktmicro_payload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly encode_nvram_commit_report: () => any;
+    readonly encode_walkplay_payload: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly export_apo_txt: (a: number, b: number) => [number, number, number, number];
     readonly export_pipewire_conf: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly export_wavelet_txt: (a: number, b: number) => [number, number, number, number];

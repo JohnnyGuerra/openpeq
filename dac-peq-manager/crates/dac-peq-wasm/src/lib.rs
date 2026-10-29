@@ -114,6 +114,40 @@ pub fn encode_ktmicro_payload(
 }
 
 #[wasm_bindgen]
+pub fn encode_walkplay_payload(
+    preset_json: &str,
+    slot_id: u8,
+    commit_flash: bool,
+) -> std::result::Result<js_sys::Array, JsValue> {
+    let preset: PeqPreset = serde_json::from_str(preset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
+
+    let arr = js_sys::Array::new();
+    for (i, band) in preset.bands.iter().enumerate() {
+        let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
+            i as u8,
+            band.freq,
+            band.gain,
+            band.q,
+            band.filter_type,
+            slot_id,
+        );
+        arr.push(&js_sys::Uint8Array::from(&pkt[..]));
+    }
+
+    if commit_flash {
+        let gain_pkt = dac_peq_core::codec::walkplay::encode_walkplay_global_gain(preset.preamp);
+        arr.push(&js_sys::Uint8Array::from(&gain_pkt[..]));
+
+        for seq in dac_peq_core::codec::walkplay::get_walkplay_commit_sequence() {
+            arr.push(&js_sys::Uint8Array::from(&seq[..]));
+        }
+    }
+
+    Ok(arr)
+}
+
+#[wasm_bindgen]
 pub fn encode_factory_reset_report() -> js_sys::Uint8Array {
     let rpt = encode_factory_reset();
     js_sys::Uint8Array::from(rpt.as_bytes())

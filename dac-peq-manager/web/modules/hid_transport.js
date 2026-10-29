@@ -22,6 +22,17 @@ export function isMoondropFreeDsp(dev) {
   );
 }
 
+export function isWalkplayDsp(dev) {
+  if (!dev) return false;
+  const prod = (dev.productName || "").toLowerCase();
+  return (
+    (dev.vendorId === 0x3302 && (dev.productId === 0xc20f || dev.productId === 0x43cc)) ||
+    prod.includes("protocol micro") ||
+    prod.includes("protocol max") ||
+    prod.includes("crinear")
+  );
+}
+
 // ── NVRAM Flash Wear-Out Health Tracker ───────────────────────────────────────
 export function getFlashWearKey(dev) {
   if (!dev) return "dac_flash_history_generic";
@@ -471,6 +482,194 @@ export function readMoondropReport(dev, timeoutMs = 500) {
       const req = new Uint8Array(64);
       req[0] = 0x22;
       dev.sendReport(0x00, req).catch((err) => {
+        cleanup();
+        reject(err);
+      });
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
+  });
+}
+
+// ── WalkPlay Scheme 11 & Scheme 16 Hardware Transport ─────────────────────────
+export function computeWalkplayBiquad(freq, gain, q) {
+  const bArr = new Uint8Array(20);
+  if (Math.abs(gain) < 1e-6) return bArr;
+
+  const A = Math.pow(10, gain / 40);
+  const w0 = (freq * 2 * Math.PI) / 96000;
+  const sinw0 = Math.sin(w0);
+  const cosw0 = Math.cos(w0);
+  const alpha = sinw0 / (2 * Math.max(q, 0.01));
+
+  const b0 = 1 + alpha * A;
+  const b1 = -2 * cosw0;
+  const b2 = 1 - alpha * A;
+  const a0 = 1 + alpha / A;
+  const a1 = -2 * cosw0;
+  const a2 = 1 - alpha / A;
+
+  const scale = 1073741824; // 2^30
+  const iArr = [1, a1 / a0, a2 / a0].map((d) => Math.round(d * scale));
+  const iArr2 = [b0 / a0, b1 / a0, b2 / a0].map((d) => Math.round(d * scale));
+
+  const quant = [iArr2[0], iArr2[1], iArr2[2], -iArr[1], -iArr[2]];
+  const dv = new DataView(bArr.buffer);
+  quant.forEach((v, idx) => dv.setInt32(idx * 4, v, true));
+  return bArr;
+}
+
+export function encodeWalkplayFilterPacket(filterIdx, freq, gain, q, typeStr = "PK", slot = 101) {
+  const typeMap = { LSQ: 1, PK: 2, PEAK: 2, PEAKING: 2, HSQ: 3, LP: 4, HP: 5 };
+  const typeId = typeMap[(typeStr || "PK").toUpperCase()] || 2;
+
+  const pkt = new Uint8Array(37);
+  pkt[0] = 0x01; // WRITE
+  pkt[1] = 0x09; // PEQ_VALUES
+  pkt[2] = 0x18; // 24 bytes payload
+  pkt[3] = 0x00;
+  pkt[4] = filterIdx & 0xff;
+  pkt[5] = 0x00;
+  pkt[6] = 0x00;
+
+  const biquad = computeWalkplayBiquad(freq, gain, q);
+  pkt.set(biquad, 7);
+
+  const freqU16 = Math.round(Math.max(10, Math.min(48000, freq)));
+  const qU16 = Math.round(Math.max(1, Math.min(65535, q * 256)));
+  const gainI16 = Math.round(Math.max(-32768, Math.min(32767, gain * 256)));
+
+  const dv = new DataView(pkt.buffer);
+  dv.setUint16(27, freqU16, true);
+  dv.setUint16(29, qU16, true);
+  dv.setInt16(31, gainI16, true);
+
+  pkt[33] = typeId;
+  pkt[34] = 0x00;
+  pkt[35] = slot & 0xff;
+  pkt[36] = 0x00; // END
+
+  return pkt;
+}
+
+export function decodeWalkplayFilterPacket(bytes) {
+  if (!bytes || bytes.length < 34) return null;
+  const dv = new DataView(new Uint8Array(bytes).buffer);
+  const filterIdx = bytes[4];
+  const freqRaw = dv.getUint16(27, true);
+  const qRaw = dv.getUint16(29, true);
+  const gainRaw = dv.getInt16(31, true);
+  const typeId = bytes[33];
+
+  if (freqRaw === 0xffff && qRaw === 0xffff && gainRaw === -1) {
+    return {
+      index: filterIdx + 1,
+      freq: 0,
+      gain: 0,
+      q: 0,
+      type: "PK",
+      disabled: true,
+    };
+  }
+
+  const typeRevMap = { 1: "LSQ", 2: "PK", 3: "HSQ", 4: "LP", 5: "HP" };
+  return {
+    index: filterIdx + 1,
+    freq: freqRaw,
+    gain: Math.round((gainRaw / 256) * 100) / 100,
+    q: Math.round((qRaw / 256) * 100) / 100,
+    type: typeRevMap[typeId] || "PK",
+    disabled: freqRaw === 0 || qRaw === 0,
+  };
+}
+
+export function encodeWalkplayGlobalGain(gainDb) {
+  const int8 = Math.round(Math.max(-128, Math.min(127, gainDb)));
+  return new Uint8Array([0x01, 0x03, 0x02, 0x00, int8 & 0xff]);
+}
+
+export function getWalkplayCommitSequence() {
+  return [
+    new Uint8Array([0x01, 0x05, 0x00]),
+    new Uint8Array([0x01, 0x17, 0x00]),
+    new Uint8Array([0x01, 0x0a, 0x04, 0x00, 0x00, 0xff, 0xff, 0x00]),
+    new Uint8Array([0x01, 0x01, 0x01, 0x00]),
+  ];
+}
+
+export async function readWalkplayPeq(dev, maxFilters = 8, timeoutMs = 2000) {
+  if (!dev) throw new Error("No device provided.");
+
+  const filters = [];
+  const onReport = (event) => {
+    const dv = event.data;
+    if (!dv || dv.byteLength < 34) return;
+    const bytes = new Uint8Array(dv.buffer);
+    if (bytes[1] !== 0x09) return; // PEQ_VALUES
+    const filter = decodeWalkplayFilterPacket(bytes);
+    if (filter) {
+      filters[filter.index - 1] = filter;
+    }
+  };
+
+  dev.addEventListener("inputreport", onReport);
+  try {
+    for (let i = 0; i < maxFilters; i++) {
+      const req = new Uint8Array([0x80, 0x09, 0x00, 0x00, i, 0x00]);
+      await dev.sendReport(0x4b, req);
+      await new Promise((r) => setTimeout(r, 40));
+    }
+
+    // Await responses
+    const start = Date.now();
+    while (filters.filter(Boolean).length < maxFilters && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  } finally {
+    try {
+      dev.removeEventListener("inputreport", onReport);
+    } catch (_) {}
+  }
+
+  // Read global gain
+  let preamp = 0;
+  try {
+    preamp = await readWalkplayGlobalGain(dev, 300);
+  } catch (_) {}
+
+  return { preamp, bands: filters.filter(Boolean) };
+}
+
+export function readWalkplayGlobalGain(dev, timeoutMs = 500) {
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    const onReport = (event) => {
+      const dv = event.data;
+      if (!dv || dv.byteLength < 5) return;
+      const bytes = new Uint8Array(dv.buffer);
+      if (bytes[0] === 0x80 && bytes[1] === 0x03) {
+        cleanup();
+        const int8 = new Int8Array([bytes[4]])[0];
+        resolve(int8);
+      }
+    };
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      try {
+        dev.removeEventListener("inputreport", onReport);
+      } catch (_) {}
+    };
+
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timeout reading WalkPlay global gain."));
+    }, timeoutMs);
+
+    try {
+      dev.addEventListener("inputreport", onReport);
+      dev.sendReport(0x4b, new Uint8Array([0x80, 0x03, 0x00])).catch((err) => {
         cleanup();
         reject(err);
       });

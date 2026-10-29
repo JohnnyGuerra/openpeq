@@ -43,10 +43,11 @@ class DACInfo:
     trrs_mic: bool = True
     recommendation: str = ""
     quirks: List[str] = field(default_factory=list)
+    hardware_bands: Optional[int] = None
 
     @property
     def is_hardware_flashable(self) -> bool:
-        return self.flashable and self.architecture in ("ktmicro_dsp", "moondrop_dsp")
+        return self.flashable and self.architecture in ("ktmicro_dsp", "moondrop_dsp", "walkplay_dsp")
 
     @property
     def is_fixed_mask_rom(self) -> bool:

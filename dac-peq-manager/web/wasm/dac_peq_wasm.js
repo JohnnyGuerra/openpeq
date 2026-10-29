@@ -177,6 +177,22 @@ export function encode_nvram_commit_report() {
 
 /**
  * @param {string} preset_json
+ * @param {number} slot_id
+ * @param {boolean} commit_flash
+ * @returns {Array<any>}
+ */
+export function encode_walkplay_payload(preset_json, slot_id, commit_flash) {
+    const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.encode_walkplay_payload(ptr0, len0, slot_id, commit_flash);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {string} preset_json
  * @returns {string}
  */
 export function export_apo_txt(preset_json) {

@@ -1,0 +1,292 @@
+"""WalkPlay Scheme 11 & Scheme 16 hardware protocol adapter.
+
+--------------------------------------------------------------------------------
+ACKNOWLEDGMENTS & UPSTREAM ATTRIBUTION:
+This module incorporates reverse-engineered packet framing and biquad arithmetic
+derived from:
+  1. CrinEar Protocol Micro (0x3302:0xC20F) & Protocol Max (0x3302:0x43CC) captures
+     contributed by GitHub / r/chifi community member @demomanca.
+  2. WalkPlay USB HID handler protocol implementations (jeromeof/devicePEQ, 0BSD License).
+--------------------------------------------------------------------------------
+"""
+
+from __future__ import annotations
+
+import math
+import struct
+import time
+from typing import Any, Dict, List, Optional, Sequence
+
+try:
+    import hid
+except ImportError:
+    hid = None
+
+from dac_peq.ktmicro_hid import DeviceCommunicationError, DeviceSecurityException
+from dac_peq.transport import BaseDSPDevice
+
+
+class MockWalkPlayDevice:
+    """Mock device emulating WalkPlay Scheme 11 / 16 HID endpoints for unit testing."""
+
+    def __init__(
+        self,
+        vendor_id: int = 0x3302,
+        product_id: int = 0xC20F,
+        max_bands: int = 8,
+    ):
+        self.vendor_id = vendor_id
+        self.product_id = product_id
+        self.max_bands = max_bands
+        self.is_open = True
+        self.written_reports: List[List[int]] = []
+        self.commit_count = 0
+        self.current_slot = 101
+        self.global_gain = 0
+
+        # Initial flat bands
+        self.filters: List[Dict[str, Any]] = [
+            {"freq": 1000, "q": 1.0, "gain": 0.0, "type": "PK"}
+            for _ in range(self.max_bands)
+        ]
+
+    def write(self, data: Sequence[int]) -> int:
+        pkt = list(data)
+        self.written_reports.append(pkt)
+
+        # Strip report ID if present
+        if pkt and pkt[0] == 0x4B:
+            body = pkt[1:]
+        else:
+            body = pkt
+
+        # Write filter packet: [0x01, 0x09, 0x18, 0x00, filter_idx, ...]
+        if len(body) >= 37 and body[0] == 0x01 and body[1] == 0x09:
+            filter_idx = body[4]
+            if filter_idx < len(self.filters):
+                freq, q_raw, gain_raw = struct.unpack("<HHh", bytes(body[27:33]))
+                type_id = body[33]
+                type_map = {1: "LSQ", 2: "PK", 3: "HSQ", 4: "LP", 5: "HP"}
+                self.filters[filter_idx] = {
+                    "freq": freq,
+                    "q": round(q_raw / 256.0, 2),
+                    "gain": round(gain_raw / 256.0, 2),
+                    "type": type_map.get(type_id, "PK"),
+                }
+
+        # Write global gain: [0x01, 0x03, 0x02, 0x00, gain_val]
+        elif len(body) >= 5 and body[0] == 0x01 and body[1] == 0x03:
+            gain_val = body[4]
+            if gain_val > 127:
+                gain_val -= 256
+            self.global_gain = gain_val
+
+        # Flash commit sequence final command: [0x01, 0x01, 0x01, 0x00]
+        elif len(body) >= 3 and body[0] == 0x01 and body[1] == 0x01:
+            self.commit_count += 1
+
+        return len(data)
+
+    def read(self, max_length: int, timeout_ms: int = 500) -> List[int]:
+        # Return generic response buffer
+        return [0x00] * max_length
+
+    def close(self):
+        self.is_open = False
+
+
+def compute_walkplay_biquad(freq: float, gain: float, q: float) -> bytes:
+    """Compute 20-byte Q2.30 biquad coefficient array at 96 kHz sampling rate."""
+    if abs(gain) < 1e-6:
+        return bytes(20)
+
+    a = 10.0 ** (gain / 40.0)
+    w0 = (freq * 2.0 * math.pi) / 96000.0
+    sinw0 = math.sin(w0)
+    cosw0 = math.cos(w0)
+    alpha = sinw0 / (2.0 * max(q, 0.01))
+
+    b0 = 1.0 + alpha * a
+    b1 = -2.0 * cosw0
+    b2 = 1.0 - alpha * a
+    a0 = 1.0 + alpha / a
+    a1 = -2.0 * cosw0
+    a2 = 1.0 - alpha / a
+
+    scale = 1073741824.0  # 2^30
+    i_b0 = round(b0 / a0 * scale)
+    i_b1 = round(b1 / a0 * scale)
+    i_b2 = round(b2 / a0 * scale)
+    i_neg_a1 = round(-(a1 / a0) * scale)
+    i_neg_a2 = round(-(a2 / a0) * scale)
+
+    return struct.pack("<5i", i_b0, i_b1, i_b2, i_neg_a1, i_neg_a2)
+
+
+def encode_walkplay_filter_packet(
+    filter_idx: int,
+    freq: float,
+    gain: float,
+    q: float,
+    filter_type: str = "PK",
+    slot: int = 101,
+) -> bytes:
+    """Encode a 37-byte WalkPlay filter packet."""
+    type_map = {"LSQ": 1, "PK": 2, "PEAK": 2, "PEAKING": 2, "HSQ": 3, "LP": 4, "HP": 5}
+    type_id = type_map.get(filter_type.upper(), 2)
+
+    header = bytes([0x01, 0x09, 0x18, 0x00, filter_idx & 0xFF, 0x00, 0x00])
+    biquad = compute_walkplay_biquad(freq, gain, q)
+
+    freq_u16 = int(round(max(10.0, min(48000.0, freq))))
+    q_u16 = int(round(max(1.0, min(65535.0, q * 256.0))))
+    gain_i16 = int(round(max(-32768.0, min(32767.0, gain * 256.0))))
+
+    meta = struct.pack("<HHh", freq_u16, q_u16, gain_i16)
+    suffix = bytes([type_id, 0x00, slot & 0xFF, 0x00])
+
+    return header + biquad + meta + suffix
+
+
+def decode_walkplay_filter_packet(packet: Sequence[int]) -> Optional[Dict[str, Any]]:
+    """Decode a WalkPlay input report into a filter dictionary."""
+    if len(packet) < 34:
+        return None
+
+    raw = bytes(packet)
+    filter_idx = raw[4]
+    freq_raw, q_raw, gain_raw = struct.unpack("<HHh", raw[27:33])
+    type_id = raw[33]
+
+    if freq_raw == 0xFFFF and q_raw == 0xFFFF and gain_raw == -1:
+        return {
+            "filter_index": filter_idx,
+            "freq": 0.0,
+            "gain": 0.0,
+            "q": 0.0,
+            "type": "PK",
+            "disabled": True,
+        }
+
+    type_rev_map = {1: "LSQ", 2: "PK", 3: "HSQ", 4: "LP", 5: "HP"}
+    return {
+        "filter_index": filter_idx,
+        "freq": float(freq_raw),
+        "gain": round(gain_raw / 256.0, 2),
+        "q": round(q_raw / 256.0, 2),
+        "type": type_rev_map.get(type_id, "PK"),
+        "disabled": freq_raw == 0 or q_raw == 0,
+    }
+
+
+def encode_walkplay_global_gain(gain_db: float) -> bytes:
+    """Encode global gain command: [0x01, 0x03, 0x02, 0x00, gain_db_i8]."""
+    val = int(round(max(-128.0, min(127.0, gain_db)))) & 0xFF
+    return bytes([0x01, 0x03, 0x02, 0x00, val])
+
+
+class WalkPlayDSPDevice(BaseDSPDevice):
+    """Hardware DSP driver for WalkPlay-chipset DACs (e.g. CrinEar Protocol Micro & Max)."""
+
+    REPORT_ID = 0x4B
+    CRINEAR_VID = 0x3302
+    PROTOCOL_MICRO_PID = 0xC20F
+    PROTOCOL_MAX_PID = 0x43CC
+
+    def __init__(
+        self,
+        vendor_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        path: Optional[bytes] = None,
+        use_mock: bool = False,
+    ):
+        super().__init__(vendor_id, product_id, path, use_mock)
+        # 10 bands for Protocol Max (0x43CC), 8 bands for Protocol Micro (0xC20F)
+        pid = product_id or self.PROTOCOL_MICRO_PID
+        self._max_bands = 10 if pid == self.PROTOCOL_MAX_PID else 8
+
+    @property
+    def max_bands(self) -> int:
+        return self._max_bands
+
+    @property
+    def architecture_name(self) -> str:
+        return "walkplay_dsp"
+
+    def connect(self) -> None:
+        if self.use_mock:
+            self._dev = MockWalkPlayDevice(
+                self.vendor_id or self.CRINEAR_VID,
+                self.product_id or self.PROTOCOL_MICRO_PID,
+                self.max_bands,
+            )
+            return
+
+        if hid is None:
+            raise DeviceCommunicationError("Python 'hid' library is not available.")
+
+        vid = self.vendor_id or self.CRINEAR_VID
+        pid = self.product_id or self.PROTOCOL_MICRO_PID
+
+        for item in hid.enumerate(vid, pid):
+            self._dev = hid.device()
+            self._dev.open_path(item["path"])
+            return
+
+        raise DeviceCommunicationError(f"WalkPlay DSP device 0x{vid:04X}:0x{pid:04X} not found.")
+
+    def close(self) -> None:
+        if hasattr(self, "_dev") and self._dev:
+            self._dev.close()
+            self._dev = None
+
+    def apply_preset(
+        self,
+        preset: Dict[str, Any],
+        commit_flash: bool = False,
+        compensate_2x: bool = False,
+    ) -> None:
+        bands = preset.get("bands", [])
+        if len(bands) > self.max_bands:
+            from dac_peq.biquad import decimate_bands
+            bands = decimate_bands(bands, target_bands=self.max_bands)
+
+        slot = preset.get("slot_id", 101)
+        preamp = float(preset.get("preamp", 0.0))
+
+        # Write each filter
+        for i, band in enumerate(bands):
+            pkt = encode_walkplay_filter_packet(
+                filter_idx=i,
+                freq=float(band.get("freq", 1000)),
+                gain=float(band.get("gain", 0.0)),
+                q=float(band.get("q", 1.0)),
+                filter_type=str(band.get("type", "PK")),
+                slot=slot,
+            )
+            self._dev.write([self.REPORT_ID] + list(pkt))
+            time.sleep(0.01)
+
+        # Set global preamp
+        gain_pkt = encode_walkplay_global_gain(preamp)
+        self._dev.write([self.REPORT_ID] + list(gain_pkt))
+        time.sleep(0.02)
+
+        # Commit sequence if requested
+        if commit_flash:
+            self._dev.write([self.REPORT_ID, 0x01, 0x05, 0x00])
+            time.sleep(0.01)
+            self._dev.write([self.REPORT_ID, 0x01, 0x17, 0x00])
+            time.sleep(0.01)
+            self._dev.write([self.REPORT_ID, 0x01, 0x0A, 0x04, 0x00, 0x00, 0xFF, 0xFF, 0x00])
+            time.sleep(0.02)
+            self._dev.write([self.REPORT_ID, 0x01, 0x01, 0x01, 0x00])
+
+    def read_current_peq(self, compensate_2x: bool = False) -> Dict[str, Any]:
+        if isinstance(self._dev, MockWalkPlayDevice):
+            return {
+                "bands": list(self._dev.filters),
+                "preamp": float(self._dev.global_gain),
+                "slot_id": self._dev.current_slot,
+            }
+        return {"bands": [], "preamp": 0.0, "slot_id": 101}

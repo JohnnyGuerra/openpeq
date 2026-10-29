@@ -27,6 +27,24 @@ impl FilterType {
             FilterType::Bypass => 0,
         }
     }
+
+    pub fn to_walkplay_id(&self) -> u8 {
+        match self {
+            FilterType::LowShelf => 1,
+            FilterType::Peaking => 2,
+            FilterType::HighShelf => 3,
+            FilterType::Bypass => 2,
+        }
+    }
+
+    pub fn from_walkplay_id(id: u8) -> Self {
+        match id {
+            1 => FilterType::LowShelf,
+            2 => FilterType::Peaking,
+            3 => FilterType::HighShelf,
+            _ => FilterType::Peaking,
+        }
+    }
 }
 
 impl FromStr for FilterType {

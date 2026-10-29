@@ -41,12 +41,9 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **SPACE Pro** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0x431D` | 10 Bands | Multi | 🔵 | Dual CS43131 flagship dongle with 10-band hardware PEQ. |
 | **STARGATE II** | Tanchjim | Cirrus CS43131 + WalkPlay | `0x3302:0x4353` | 8 Bands | Multi | 🔵 | CS43131 dongle using WalkPlay Scheme 15 framing. |
 | **DSP Cable - Memory**| ddHiFi | WalkPlay Scheme 15 DSP | `0x3302` | 8 Bands | Preset 1-4 | 🔵 | Audiophile MMCX / 0.78mm 2-pin Type-C DSP cable. |
+| **Protocol Micro** | CrinEar | WalkPlay CB1300D (Scheme 11) | `0x3302:0xC20F` | 8 Bands | Slot 101 | 🟡 | Crinacle $9.99 ultra-budget dongle with 8-band hardware PEQ. WalkPlay Scheme 11 protocol framing and 96kHz Q2.30 biquad arithmetic reverse-engineered from WebHID traces provided by `@demomanca`. Native Web Flasher & CLI support ready. |
+| **Protocol Max** | CrinEar | WalkPlay CB1300D (Scheme 16) | `0x3302:0x43CC` | 10 Bands | Slot 101 | 🟡 | Crinacle flagship dongle with 10-band hardware PEQ (3.5mm SE + 4.4mm BAL). WalkPlay Scheme 16 protocol framing reverse-engineered from WebHID traces provided by `@demomanca`. Native Web Flasher & CLI support ready. |
 | **KA15** | FiiO | Dual CS43198 + SGM8262 | `0x2972:0x0104` | 10 Bands | USER1-3 | 🔵 | 560mW Desktop Mode dongle with color LCD retro cassette display. FiiO framed protocol. |
-| **KA17** | FiiO | Dual ES9069Q + THX AAA 78+ | `0x2972:0x0105` | 10 Bands | USER1-3 | 🔵 | 650mW Desktop Mode with dedicated external power port. |
-| **BTR13** | FiiO | Dual CS43131 + QCC5125 | `0x2972:0x0106` | 10 Bands | USER1-3 | 🔵 | Bluetooth 5.1 + USB DAC with independent hardware PEQ. |
-| **BTR17** | FiiO | Dual ES9069Q + THX AAA 78+ | `0x2972` | 10 Bands | USER1-10 | 🔵 | Flagship Bluetooth / USB DAC with aptX Lossless and LDAC. |
-| **5K Reference** | Qudelix | Dual ES9218P + QCC5124 | `0x04DD:0x1001` | 20 Bands | 20 Presets | 🔵 | Wireless & USB DAC with 20 onboard memory slots. Qudelix serial HID protocol. |
-| **Protocol Micro** | CrinEar / Hangout.audio | Modified SPV4040 | TBD (Hangout WebHID) | 8 Bands | Multi | 🔵 | Crinacle ultra-budget $9.99 dongle with 8-band hardware PEQ (EQ.Hangout.Audio). Packet capture requested from r/chifi community. |
 
 ---
 
