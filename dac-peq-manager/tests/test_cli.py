@@ -243,6 +243,31 @@ def test_cli_factory_reset():
     assert "0x43 CLEAR" in res.output
 
 
+def test_cli_export_qudelix(tmp_path: Path):
+    """Verify CLI export-qudelix command outputs both JSON and text profiles."""
+    out_json = tmp_path / "test_q5k.json"
+    out_txt = tmp_path / "test_q5k.txt"
+
+    # Export JSON
+    res_json = runner.invoke(app, ["export-qudelix", "bmasterx6", "-o", str(out_json), "--json", "--auto-preamp"])
+    assert res_json.exit_code == 0
+    assert "Qudelix-5K Profile Generated" in res_json.output
+    assert "Qudelix Chrome App JSON" in res_json.output
+    assert out_json.is_file()
+
+    parsed = json.loads(out_json.read_text())
+    assert parsed["profile_name"] == "bmasterx6"
+    assert len(parsed["bands"]) == 10
+
+    # Export Text
+    res_txt = runner.invoke(app, ["export-qudelix", "bmasterx6", "-o", str(out_txt), "--text"])
+    assert res_txt.exit_code == 0
+    assert "AutoEq 10-Band Text" in res_txt.output
+    assert out_txt.is_file()
+    assert "Filter 1: ON" in out_txt.read_text()
+
+
+
 
 
 

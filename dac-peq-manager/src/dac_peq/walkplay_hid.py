@@ -186,12 +186,16 @@ def encode_walkplay_global_gain(gain_db: float) -> bytes:
 
 
 class WalkPlayDSPDevice(BaseDSPDevice):
-    """Hardware DSP driver for WalkPlay-chipset DACs (e.g. CrinEar Protocol Micro & Max)."""
+    """Hardware DSP driver for WalkPlay-chipset DACs (CrinEar Protocol Micro/Max, Truthear KEYX, Tanchjim SPACE Pro)."""
 
     REPORT_ID = 0x4B
+    WALKPLAY_VID = 0x3302
     CRINEAR_VID = 0x3302
     PROTOCOL_MICRO_PID = 0xC20F
     PROTOCOL_MAX_PID = 0x43CC
+    TRUTHEAR_KEYX_PID = 0x4362
+    TANCHJIM_SPACE_PRO_PID = 0x431D
+    TANCHJIM_STARGATE2_PID = 0x4353
 
     def __init__(
         self,
@@ -201,9 +205,11 @@ class WalkPlayDSPDevice(BaseDSPDevice):
         use_mock: bool = False,
     ):
         super().__init__(vendor_id, product_id, path, use_mock)
-        # 10 bands for Protocol Max (0x43CC), 8 bands for Protocol Micro (0xC20F)
         pid = product_id or self.PROTOCOL_MICRO_PID
-        self._max_bands = 10 if pid == self.PROTOCOL_MAX_PID else 8
+        if pid in (self.PROTOCOL_MAX_PID, self.TANCHJIM_SPACE_PRO_PID):
+            self._max_bands = 10
+        else:
+            self._max_bands = 8
 
     @property
     def max_bands(self) -> int:
@@ -251,7 +257,8 @@ class WalkPlayDSPDevice(BaseDSPDevice):
             from dac_peq.biquad import decimate_bands
             bands = decimate_bands(bands, target_bands=self.max_bands)
 
-        slot = preset.get("slot_id", 101)
+        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, self.TANCHJIM_SPACE_PRO_PID, self.TANCHJIM_STARGATE2_PID) else 101
+        slot = preset.get("slot_id", default_slot)
         preamp = float(preset.get("preamp", 0.0))
 
         # Write each filter

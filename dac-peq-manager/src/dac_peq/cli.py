@@ -41,6 +41,7 @@ from dac_peq.exporters import (
     DEFAULT_CX31993_SINK,
     export_apo_suite,
     export_pipewire_conf,
+    export_qudelix,
     format_pipewire_filter_chain,
 )
 from dac_peq.flash_tracker import FlashWearTracker
@@ -616,8 +617,9 @@ def cmd_export_pipewire(
     sink: str = typer.Option(DEFAULT_CX31993_SINK, "--sink", "-s", help="Target ALSA sink name"),
     install: bool = typer.Option(False, "--install", "-i", help="Install directly to ~/.config/pipewire/pipewire.conf.d/"),
     full_target: bool = typer.Option(False, "--full-target", "--10-band", help="Export full 10-band target profile instead of decimated hardware profile"),
+    auto_preamp: bool = typer.Option(False, "--auto-preamp", help="Automatically calculate negative pre-amp to prevent inter-sample clipping"),
 ):
-    """Generate host-side PipeWire filter-chain configuration bound to JCALLY JM6 Pro (CX31993)."""
+    """Generate host-side PipeWire filter-chain configuration bound to JCALLY JM6 Pro (CX31993) or desktop DACs."""
     preset = load_preset_data(preset_name)
     if full_target and preset.get("full_bands") and len(preset.get("full_bands")) > 5:
         preset = dict(preset)
@@ -635,17 +637,18 @@ def cmd_export_pipewire(
     else:
         out_file = Path(f"99-jm6pro-{preset_slug}.conf")
 
-    written = export_pipewire_conf(preset, output_path=out_file, sink_target=sink)
+    written = export_pipewire_conf(preset, output_path=out_file, sink_target=sink, auto_preamp=auto_preamp)
 
     console.print(
         Panel(
             f"[bold green]PipeWire Filter-Chain Generated:[/bold green] [bold cyan]{written}[/bold cyan]\n"
-            f"Preset: [bold]{preset.get('name')}[/bold] ({len(preset.get('bands', []))} Bands) | Target Sink: [yellow]{sink}[/yellow]\n\n"
+            f"Preset: [bold]{preset.get('name')}[/bold] ({len(preset.get('bands', []))} Bands) | Target Sink: [yellow]{sink}[/yellow]\n"
+            f"Auto Anti-Clipping Guard: [{'green' if auto_preamp else 'dim'}]{'ENABLED' if auto_preamp else 'DISABLED'}[/]\n\n"
             "[bold white]To activate with PipeWire:[/bold white]\n"
             f"  1. Ensure config is placed in [cyan]~/.config/pipewire/pipewire.conf.d/[/cyan]\n"
             "  2. Reload PipeWire: [cyan]systemctl --user restart pipewire[/cyan]\n"
             f"  3. Connect output or select [green]'JCALLY JM6 Pro DSP [{preset.get('name')}]'[/green] in Pavucontrol / WirePlumber.",
-            title="JCALLY JM6 Pro Host DSP",
+            title="Host DSP Exporter (PipeWire)",
             border_style="green",
         )
     )
@@ -656,25 +659,61 @@ def cmd_export_apo(
     preset_name: str = typer.Argument(..., help="Preset name or JSON file path"),
     output_dir: str = typer.Option("./exports", "--output-dir", "-o", help="Directory to save export files"),
     full_target: bool = typer.Option(False, "--full-target", "--10-band", help="Export full 10-band target profile instead of decimated hardware profile"),
+    auto_preamp: bool = typer.Option(False, "--auto-preamp", help="Automatically calculate negative pre-amp to prevent inter-sample clipping"),
 ):
-    """Generate EqualizerAPO .txt and Wavelet (Android) profiles for JCALLY JM6 Pro."""
+    """Generate EqualizerAPO .txt and Wavelet (Android) profiles for JCALLY JM6 Pro and desktop DACs."""
     preset = load_preset_data(preset_name)
     if full_target and preset.get("full_bands") and len(preset.get("full_bands")) > 5:
         preset = dict(preset)
         preset["bands"] = preset["full_bands"]
         console.print(f"[cyan]Exporting full-fidelity target profile ({len(preset['bands'])} bands).[/cyan]")
 
-    results = export_apo_suite(preset, output_dir=output_dir)
+    results = export_apo_suite(preset, output_dir=output_dir, auto_preamp=auto_preamp)
 
     console.print(
         Panel(
-            f"[bold green]Exported Host DSP Suite for:[/bold green] [bold cyan]{preset.get('name')}[/bold cyan] ({len(preset.get('bands', []))} Bands)\n\n"
+            f"[bold green]Exported Host DSP Suite for:[/bold green] [bold cyan]{preset.get('name')}[/bold cyan] ({len(preset.get('bands', []))} Bands)\n"
+            f"Auto Anti-Clipping Guard: [{'green' if auto_preamp else 'dim'}]{'ENABLED' if auto_preamp else 'DISABLED'}[/]\n\n"
             f"  * [bold]EqualizerAPO (.txt):[/bold] [cyan]{results['equalizer_apo']}[/cyan]\n"
             f"  * [bold]Wavelet GraphicEQ (.txt):[/bold] [cyan]{results['wavelet_txt']}[/cyan]\n"
             f"  * [bold]Wavelet JSON Profile:[/bold] [cyan]{results['wavelet_json']}[/cyan]\n\n"
             "[dim]EqualizerAPO: Import or Include in config.txt on Windows.\n"
             "Wavelet (Android): Import the GraphicEQ.txt via AutoEq -> Import in Wavelet.[/dim]",
             title="Universal Host DSP Exporter",
+            border_style="green",
+        )
+    )
+
+
+@app.command("export-qudelix")
+def cmd_export_qudelix(
+    preset_name: str = typer.Argument(..., help="Preset name or JSON file path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Custom output file path (.json or .txt)"),
+    as_json: bool = typer.Option(True, "--json/--text", help="Export as Qudelix Chrome App JSON or 10-band text import table"),
+    full_target: bool = typer.Option(True, "--full-target/--decimated", help="Export full 10-band target profile if available"),
+    auto_preamp: bool = typer.Option(False, "--auto-preamp", help="Automatically calculate negative pre-amp to prevent clipping"),
+):
+    """Generate Qudelix-5K profile (JSON backup or AutoEq 10-band text) for Qudelix Chrome & mobile apps."""
+    preset = load_preset_data(preset_name)
+    if full_target and preset.get("full_bands") and len(preset.get("full_bands")) > 5:
+        preset = dict(preset)
+        preset["bands"] = preset["full_bands"]
+        console.print(f"[cyan]Exporting full-fidelity target profile ({len(preset['bands'])} bands).[/cyan]")
+
+    out_file = export_qudelix(preset, output_path=output, as_json=as_json, auto_preamp=auto_preamp)
+
+    format_label = "Qudelix Chrome App JSON" if as_json else "AutoEq 10-Band Text"
+    console.print(
+        Panel(
+            f"[bold green]Qudelix-5K Profile Generated:[/bold green] [bold cyan]{out_file}[/bold cyan]\n"
+            f"Preset: [bold]{preset.get('name')}[/bold] ({len(preset.get('bands', []))} Bands)\n"
+            f"Format: [bold magenta]{format_label}[/bold magenta]\n"
+            f"Auto Anti-Clipping Guard: [{'green' if auto_preamp else 'dim'}]{'ENABLED' if auto_preamp else 'DISABLED'}[/]\n\n"
+            "[bold white]To import into Qudelix-5K:[/bold white]\n"
+            "  1. Open Qudelix Chrome App or Android/iOS App -> Equalizer section.\n"
+            "  2. Select an EQ slot (Preset / User) -> Click Import or Paste.\n"
+            "  3. Profile is saved to Qudelix-5K onboard memory.",
+            title="Qudelix-5K Profile Exporter",
             border_style="green",
         )
     )

@@ -98,3 +98,79 @@ export function formatWaveletGraphicEq(bands, preampDb, points = 127) {
   const pairs = frequencies.map((f, i) => `${Math.round(f)} ${curve[i].toFixed(1)}`);
   return "GraphicEQ: " + pairs.join("; ") + "\n";
 }
+
+export function formatQudelixJson(preset, bands, isFull = false) {
+  const preampDb = Number(preset.preamp ?? 0.0);
+  const typeToQ5k = {
+    PK: "PEAK",
+    PEAK: "PEAK",
+    PEAKING: "PEAK",
+    LSQ: "LOW_SHELF",
+    LOW_SHELF: "LOW_SHELF",
+    LOWSHELF: "LOW_SHELF",
+    HSQ: "HIGH_SHELF",
+    HIGH_SHELF: "HIGH_SHELF",
+    HIGHSHELF: "HIGH_SHELF",
+  };
+
+  const q5kBands = [];
+  const totalSlots = 10;
+  for (let i = 0; i < totalSlots; i++) {
+    if (i < bands.length) {
+      const b = bands[i];
+      const ftype = typeToQ5k[String(b.type || "PK").toUpperCase()] || "PEAK";
+      q5kBands.push({
+        band: i,
+        enable: b.enabled !== false ? 1 : 0,
+        type: ftype,
+        freq: Math.round(Number(b.freq || 1000.0)),
+        gain: Number(Number(b.gain || 0.0).toFixed(1)),
+        q: Number(Number(b.q || 1.0).toFixed(2)),
+      });
+    } else {
+      q5kBands.push({
+        band: i,
+        enable: 0,
+        type: "PEAK",
+        freq: 1000,
+        gain: 0.0,
+        q: 1.0,
+      });
+    }
+  }
+
+  return JSON.stringify(
+    {
+      profile_name: preset.name || "custom",
+      name: preset.name || "custom",
+      description: preset.description || "Exported from dac-peq-manager",
+      target: "Qudelix-5K Bluetooth & USB DAC/Amp",
+      preamp_db: Number(preampDb.toFixed(1)),
+      preamp: Number(preampDb.toFixed(1)),
+      eq_mode: "USER",
+      eq_list: q5kBands,
+      bands: q5kBands,
+    },
+    null,
+    2
+  );
+}
+
+export function formatQudelixText(preset, bands, isFull = false) {
+  const preampDb = Number(preset.preamp ?? 0.0);
+  let txt = `# Qudelix-5K PEQ Profile: ${preset.name || "custom"}\n# Compatible with Qudelix-5K Chrome App & Mobile App import\nPreamp: ${preampDb > 0 ? "+" : ""}${preampDb.toFixed(1)} dB\n`;
+  for (let i = 0; i < 10; i++) {
+    const idx = i + 1;
+    if (i < bands.length) {
+      const b = bands[i];
+      const freq = Number(b.freq || 1000.0);
+      const gain = Number(b.gain || 0.0);
+      const q = Number(b.q || 1.0);
+      const state = b.enabled !== false ? "ON" : "OFF";
+      txt += `Filter ${idx}: ${state} ${b.type || "PK"} Fc ${freq.toFixed(1)} Hz Gain ${gain >= 0 ? "+" : ""}${gain.toFixed(1)} dB Q ${q.toFixed(2)}\n`;
+    } else {
+      txt += `Filter ${idx}: OFF PK Fc 1000.0 Hz Gain +0.0 dB Q 1.00\n`;
+    }
+  }
+  return txt;
+}

@@ -19,6 +19,7 @@ import {
   formatPipeWireConf,
   formatEqualizerApo,
   formatWaveletGraphicEq,
+  formatQudelixJson,
 } from "./modules/exporters.js";
 
 import {
@@ -1171,6 +1172,13 @@ function exportWaveletGraphicEq() {
   showToast(`Downloaded Wavelet GraphicEQ profile (${bands.length} bands)!`);
 }
 
+function exportQudelixProfile() {
+  const { bands, tag, isFull } = getBandsForExport();
+  const jsonStr = formatQudelixJson(currentPreset, bands, isFull);
+  downloadFile(`${currentPreset.slug || "preset"}_${tag}_qudelix.json`, jsonStr);
+  showToast(`Downloaded Qudelix-5K profile (${bands.length} bands)!`);
+}
+
 // ── Web Audio Test Tone Generator & Real-Time DSP Chain ──────────────────────
 let audioCtx = null;
 let noiseNode = null;
@@ -1763,6 +1771,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnExportPw")?.addEventListener("click", exportPipeWireConf);
   document.getElementById("btnExportApo")?.addEventListener("click", exportEqualizerApo);
   document.getElementById("btnExportWavelet")?.addEventListener("click", exportWaveletGraphicEq);
+  document.getElementById("btnExportQudelix")?.addEventListener("click", exportQudelixProfile);
 
   document.getElementById("btnTestNoise")?.addEventListener("click", toggleTestNoise);
 

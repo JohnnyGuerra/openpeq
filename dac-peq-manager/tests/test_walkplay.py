@@ -86,3 +86,26 @@ def test_walkplay_device_mock_preset_apply():
         state = dev_max.read_current_peq()
         assert len(state["bands"]) == 10
         assert state["bands"][5]["gain"] == 1.0
+
+    # Test Truthear KEYX (Scheme 15, 8 bands, slot 1)
+    dev_keyx = WalkPlayDSPDevice(vendor_id=0x3302, product_id=0x4362, use_mock=True)
+    with dev_keyx:
+        assert dev_keyx.max_bands == 8
+        preset_keyx = {
+            "preamp": -1.0,
+            "bands": [{"freq": 200 * (i + 1), "gain": 1.0, "q": 1.0, "type": "PK"} for i in range(8)],
+        }
+        dev_keyx.apply_preset(preset_keyx, commit_flash=True)
+        assert dev_keyx._dev.commit_count == 1
+
+    # Test Tanchjim SPACE Pro (Scheme 15, 10 bands, slot 1)
+    dev_space = WalkPlayDSPDevice(vendor_id=0x3302, product_id=0x431D, use_mock=True)
+    with dev_space:
+        assert dev_space.max_bands == 10
+        preset_space = {
+            "preamp": -2.0,
+            "bands": [{"freq": 150 * (i + 1), "gain": -1.0, "q": 1.2, "type": "PK"} for i in range(10)],
+        }
+        dev_space.apply_preset(preset_space, commit_flash=True)
+        assert dev_space._dev.commit_count == 1
+

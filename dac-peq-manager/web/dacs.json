@@ -389,6 +389,7 @@
     "architecture": "walkplay_dsp",
     "dac_type": "hardware_dsp",
     "flashable": true,
+    "hardware_bands": 10,
     "vid": 13058,
     "pid": 17181,
     "vid_hex": "0x3302",
@@ -397,8 +398,8 @@
     "output_power": "230mW @ 32Ω (4.4mm Balanced)",
     "outputs": ["3.5mm SE", "4.4mm Balanced"],
     "trrs_mic": false,
-    "recommendation": "Dual CS43131 flagship dongle with 10-band hardware PEQ.",
-    "quirks": []
+    "recommendation": "Dual CS43131 flagship dongle with 10-band hardware PEQ (WalkPlay Scheme 15).",
+    "quirks": ["walkplay_scheme15", "10_bands"]
   },
   {
     "id": "tanchjim_stargate_ii",
@@ -408,6 +409,7 @@
     "architecture": "walkplay_dsp",
     "dac_type": "hardware_dsp",
     "flashable": true,
+    "hardware_bands": 8,
     "vid": 13058,
     "pid": 17235,
     "vid_hex": "0x3302",
@@ -417,7 +419,7 @@
     "outputs": ["3.5mm SE"],
     "trrs_mic": true,
     "recommendation": "Compact CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15).",
-    "quirks": []
+    "quirks": ["walkplay_scheme15", "8_bands"]
   },
   {
     "id": "truthear_keyx",
@@ -427,6 +429,7 @@
     "architecture": "walkplay_dsp",
     "dac_type": "hardware_dsp",
     "flashable": true,
+    "hardware_bands": 8,
     "vid": 13058,
     "pid": 17250,
     "vid_hex": "0x3302",
@@ -435,8 +438,8 @@
     "output_power": "30mW @ 32Ω",
     "outputs": ["0.78mm 2-Pin Termination"],
     "trrs_mic": true,
-    "recommendation": "Truthear official Type-C DSP upgrade cable with 8-band hardware PEQ.",
-    "quirks": []
+    "recommendation": "Truthear official Type-C DSP upgrade cable with 8-band hardware PEQ (WalkPlay Scheme 15).",
+    "quirks": ["walkplay_scheme15", "8_bands"]
   },
   {
     "id": "fosi_audio_ds3",

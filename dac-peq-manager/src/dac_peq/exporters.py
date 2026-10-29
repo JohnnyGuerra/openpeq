@@ -25,7 +25,11 @@ import math
 from pathlib import Path
 from typing import Any, Dict, List
 
-from dac_peq.biquad import compute_composite_response, generate_log_frequencies
+from dac_peq.biquad import (
+    calculate_recommended_preamp,
+    compute_composite_response,
+    generate_log_frequencies,
+)
 
 
 DEFAULT_CX31993_SINK = "alsa_output.usb-Conexant_CX31993*"
@@ -34,18 +38,23 @@ DEFAULT_CX31993_SINK = "alsa_output.usb-Conexant_CX31993*"
 def format_pipewire_filter_chain(
     preset: Dict[str, Any],
     sink_target: str = DEFAULT_CX31993_SINK,
+    auto_preamp: bool = False,
 ) -> str:
     """Generate PipeWire filter-chain configuration content."""
     preset_name = preset.get("name", "custom")
     preset_slug = preset_name.replace(" ", "_").replace("-", "_").lower()
     description = preset.get("description", f"JM6 Pro EQ Preset {preset_name}")
-    preamp_db = float(preset.get("preamp", 0.0))
-    linear_gain = round(10.0 ** (preamp_db / 20.0), 4)
-
     bands = preset.get("bands", [])
     if len(bands) < 1:
         raise ValueError("Preset must contain at least 1 band.")
     num_bands = len(bands)
+
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
+    linear_gain = round(10.0 ** (preamp_db / 20.0), 4)
 
     # Map filter types to PipeWire builtin labels
     type_map = {
@@ -174,6 +183,7 @@ def export_pipewire_conf(
     preset: Dict[str, Any],
     output_path: Optional[str | Path] = None,
     sink_target: str = DEFAULT_CX31993_SINK,
+    auto_preamp: bool = False,
 ) -> Path:
     """Write PipeWire filter-chain configuration file."""
     preset_name = preset.get("name", "custom")
@@ -187,17 +197,22 @@ def export_pipewire_conf(
         target = Path(output_path).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
 
-    content = format_pipewire_filter_chain(preset, sink_target=sink_target)
+    content = format_pipewire_filter_chain(preset, sink_target=sink_target, auto_preamp=auto_preamp)
     target.write_text(content, encoding="utf-8")
     return target
 
 
-def format_equalizer_apo(preset: Dict[str, Any]) -> str:
+def format_equalizer_apo(preset: Dict[str, Any], auto_preamp: bool = False) -> str:
     """Generate standard EqualizerAPO .txt configuration."""
     preset_name = preset.get("name", "custom")
     description = preset.get("description", "")
-    preamp_db = float(preset.get("preamp", 0.0))
     bands = preset.get("bands", [])
+
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
 
     lines = [
         "# EqualizerAPO Configuration",
@@ -231,10 +246,18 @@ def format_equalizer_apo(preset: Dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def format_wavelet_graphiceq(preset: Dict[str, Any], points: int = 127) -> str:
+def format_wavelet_graphiceq(
+    preset: Dict[str, Any],
+    points: int = 127,
+    auto_preamp: bool = False,
+) -> str:
     """Generate AutoEq-compatible GraphicEQ string for Wavelet import."""
-    preamp_db = float(preset.get("preamp", 0.0))
     bands = preset.get("bands", [])
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
 
     frequencies = generate_log_frequencies(20.0, 20000.0, points)
     curve = compute_composite_response(bands, preamp_db, frequencies)
@@ -244,12 +267,16 @@ def format_wavelet_graphiceq(preset: Dict[str, Any], points: int = 127) -> str:
     return "GraphicEQ: " + "; ".join(pairs) + "\n"
 
 
-def format_wavelet_json(preset: Dict[str, Any]) -> Dict[str, Any]:
+def format_wavelet_json(preset: Dict[str, Any], auto_preamp: bool = False) -> Dict[str, Any]:
     """Generate Wavelet JSON profile with 9-band interpolated gains and GraphicEQ string."""
     preset_name = preset.get("name", "custom")
     description = preset.get("description", "")
-    preamp_db = float(preset.get("preamp", 0.0))
     bands = preset.get("bands", [])
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
 
     # Standard Wavelet 9-band center frequencies (Hz)
     wavelet_9_bands = [53.8, 107.7, 215.3, 430.7, 861.3, 1722.7, 3445.3, 6890.6, 13781.3]
@@ -259,7 +286,7 @@ def format_wavelet_json(preset: Dict[str, Any]) -> Dict[str, Any]:
     for f, g in zip(wavelet_9_bands, gains_9):
         nine_band_dict[f"{f:.1f}Hz"] = round(g, 1)
 
-    graphiceq_str = format_wavelet_graphiceq(preset).strip()
+    graphiceq_str = format_wavelet_graphiceq(preset, auto_preamp=auto_preamp).strip()
 
     return {
         "name": preset_name,
@@ -284,6 +311,7 @@ def format_wavelet_json(preset: Dict[str, Any]) -> Dict[str, Any]:
 def export_apo_suite(
     preset: Dict[str, Any],
     output_dir: str | Path = "./exports",
+    auto_preamp: bool = False,
 ) -> Dict[str, Path]:
     """Export EqualizerAPO .txt, Wavelet GraphicEQ .txt, and Wavelet JSON files."""
     out_dir = Path(output_dir).expanduser()
@@ -296,12 +324,272 @@ def export_apo_suite(
     wavelet_txt = out_dir / f"{preset_slug}_wavelet_graphiceq.txt"
     wavelet_json = out_dir / f"{preset_slug}_wavelet.json"
 
-    apo_file.write_text(format_equalizer_apo(preset), encoding="utf-8")
-    wavelet_txt.write_text(format_wavelet_graphiceq(preset), encoding="utf-8")
-    wavelet_json.write_text(json.dumps(format_wavelet_json(preset), indent=2), encoding="utf-8")
+    apo_file.write_text(format_equalizer_apo(preset, auto_preamp=auto_preamp), encoding="utf-8")
+    wavelet_txt.write_text(format_wavelet_graphiceq(preset, auto_preamp=auto_preamp), encoding="utf-8")
+    wavelet_json.write_text(json.dumps(format_wavelet_json(preset, auto_preamp=auto_preamp), indent=2), encoding="utf-8")
 
     return {
         "equalizer_apo": apo_file,
         "wavelet_txt": wavelet_txt,
         "wavelet_json": wavelet_json,
+    }
+
+
+def format_qudelix_text(
+    preset: Dict[str, Any],
+    auto_preamp: bool = False,
+    pad_to_10: bool = True,
+) -> str:
+    """Generate Qudelix-5K standard 10-band text configuration.
+
+    Compatible with Qudelix-5K Chrome Extension and mobile app import.
+    Uses standard AutoEq filter line syntax with 10 bands.
+    """
+    preset_name = preset.get("name", "custom")
+    description = preset.get("description", "")
+    bands = preset.get("bands", [])
+
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
+
+    lines = [
+        f"# Qudelix-5K PEQ Profile: {preset_name}",
+        f"# Description: {description}",
+        "# Compatible with Qudelix-5K Chrome App & Mobile App import",
+        f"Preamp: {preamp_db:+.1f} dB",
+    ]
+
+    type_map = {
+        "PK": "PK",
+        "PEAK": "PK",
+        "PEAKING": "PK",
+        "LSQ": "LSQ",
+        "LOW_SHELF": "LSQ",
+        "LOWSHELF": "LSQ",
+        "HSQ": "HSQ",
+        "HIGH_SHELF": "HSQ",
+        "HIGHSHELF": "HSQ",
+    }
+
+    total_slots = 10 if pad_to_10 else len(bands)
+    for i in range(total_slots):
+        idx = i + 1
+        if i < len(bands):
+            b = bands[i]
+            ftype = type_map.get(str(b.get("type", "PK")).upper(), "PK")
+            freq = float(b.get("freq", 1000.0))
+            gain = float(b.get("gain", 0.0))
+            q = float(b.get("q", 1.0))
+            enabled_str = "ON" if b.get("enabled", True) else "OFF"
+            lines.append(f"Filter {idx}: {enabled_str} {ftype} Fc {freq:.1f} Hz Gain {gain:+.1f} dB Q {q:.2f}")
+        else:
+            lines.append(f"Filter {idx}: OFF PK Fc 1000.0 Hz Gain +0.0 dB Q 1.00")
+
+    return "\n".join(lines) + "\n"
+
+
+def format_qudelix_json(
+    preset: Dict[str, Any],
+    auto_preamp: bool = False,
+    pad_to_10: bool = True,
+) -> Dict[str, Any]:
+    """Generate Qudelix-5K Chrome App JSON preset profile.
+
+    Supports direct import into the Qudelix-5K web/desktop extension.
+    """
+    preset_name = preset.get("name", "custom")
+    description = preset.get("description", "")
+    bands = preset.get("bands", [])
+
+    if auto_preamp:
+        rec = calculate_recommended_preamp(bands)
+        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
+    else:
+        preamp_db = float(preset.get("preamp", 0.0))
+
+    type_to_q5k = {
+        "PK": "PEAK",
+        "PEAK": "PEAK",
+        "PEAKING": "PEAK",
+        "LSQ": "LOW_SHELF",
+        "LOW_SHELF": "LOW_SHELF",
+        "LOWSHELF": "LOW_SHELF",
+        "HSQ": "HIGH_SHELF",
+        "HIGH_SHELF": "HIGH_SHELF",
+        "HIGHSHELF": "HIGH_SHELF",
+    }
+
+    q5k_bands = []
+    total_slots = 10 if pad_to_10 else max(len(bands), 10)
+    for i in range(total_slots):
+        if i < len(bands):
+            b = bands[i]
+            ftype = type_to_q5k.get(str(b.get("type", "PK")).upper(), "PEAK")
+            q5k_bands.append({
+                "band": i,
+                "enable": 1 if b.get("enabled", True) else 0,
+                "type": ftype,
+                "freq": round(float(b.get("freq", 1000.0)), 1),
+                "gain": round(float(b.get("gain", 0.0)), 1),
+                "q": round(float(b.get("q", 1.0)), 2),
+            })
+        else:
+            q5k_bands.append({
+                "band": i,
+                "enable": 0,
+                "type": "PEAK",
+                "freq": 1000.0,
+                "gain": 0.0,
+                "q": 1.0,
+            })
+
+    return {
+        "profile_name": preset_name,
+        "name": preset_name,
+        "description": description,
+        "target": "Qudelix-5K Bluetooth & USB DAC/Amp",
+        "preamp_db": round(preamp_db, 1),
+        "preamp": round(preamp_db, 1),
+        "eq_mode": "USER",
+        "eq_list": q5k_bands,
+        "bands": q5k_bands,
+    }
+
+
+def export_qudelix(
+    preset: Dict[str, Any],
+    output_path: Optional[str | Path] = None,
+    as_json: bool = True,
+    auto_preamp: bool = False,
+) -> Path:
+    """Export preset to Qudelix-5K format (JSON or text)."""
+    preset_name = preset.get("name", "custom")
+    preset_slug = preset_name.replace(" ", "_").replace("-", "_").lower()
+
+    if output_path is None:
+        ext = ".json" if as_json else ".txt"
+        target = Path(f"{preset_slug}_qudelix{ext}")
+    else:
+        target = Path(output_path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+    if as_json:
+        data = format_qudelix_json(preset, auto_preamp=auto_preamp)
+        target.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    else:
+        content = format_qudelix_text(preset, auto_preamp=auto_preamp)
+        target.write_text(content, encoding="utf-8")
+
+    return target
+
+
+def parse_qudelix_profile(raw_input: str | Dict[str, Any]) -> Dict[str, Any]:
+    """Parse a Qudelix-5K profile (JSON string, parsed dict, or text) into standard dac-peq preset format."""
+    if isinstance(raw_input, dict):
+        data = raw_input
+    else:
+        text = raw_input.strip()
+        if text.startswith("{") and text.endswith("}"):
+            try:
+                data = json.loads(text)
+            except Exception:
+                data = None
+        else:
+            data = None
+
+    if data is not None:
+        name = data.get("profile_name") or data.get("name") or "qudelix_import"
+        preamp = float(data.get("preamp_db", data.get("preamp", 0.0)))
+        raw_bands = data.get("eq_list") or data.get("bands") or []
+
+        q5k_to_type = {
+            "PEAK": "PK",
+            "PEAKING": "PK",
+            "PK": "PK",
+            "LOW_SHELF": "LSQ",
+            "LOWSHELF": "LSQ",
+            "LSQ": "LSQ",
+            "HIGH_SHELF": "HSQ",
+            "HIGHSHELF": "HSQ",
+            "HSQ": "HSQ",
+        }
+
+        parsed_bands = []
+        for i, b in enumerate(raw_bands):
+            enabled = bool(b.get("enable", b.get("enabled", 1)))
+            gain = float(b.get("gain", 0.0))
+            if not enabled and gain == 0.0:
+                continue
+            ftype = q5k_to_type.get(str(b.get("type", "PEAK")).upper(), "PK")
+            parsed_bands.append({
+                "index": i + 1,
+                "type": ftype,
+                "freq": float(b.get("freq", 1000.0)),
+                "gain": gain,
+                "q": float(b.get("q", 1.0)),
+                "enabled": enabled,
+            })
+
+        return {
+            "name": name,
+            "description": data.get("description", "Imported from Qudelix-5K"),
+            "preamp": preamp,
+            "bands": parsed_bands,
+        }
+
+    lines = raw_input.strip().splitlines()
+    name = "qudelix_import"
+    preamp = 0.0
+    bands = []
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            if "Profile:" in line:
+                name = line.split("Profile:", 1)[1].strip()
+            continue
+        if line.lower().startswith("preamp:"):
+            parts = line.split(":", 1)[1].replace("dB", "").strip()
+            try:
+                preamp = float(parts)
+            except ValueError:
+                pass
+            continue
+        if line.lower().startswith("filter"):
+            try:
+                tokens = line.split()
+                state = tokens[2].upper() if len(tokens) > 2 else "ON"
+                ftype = tokens[3].upper() if len(tokens) > 3 else "PK"
+                fc_idx = tokens.index("Fc") if "Fc" in tokens else -1
+                gain_idx = tokens.index("Gain") if "Gain" in tokens else -1
+                q_idx = tokens.index("Q") if "Q" in tokens else -1
+
+                freq = float(tokens[fc_idx + 1]) if fc_idx != -1 and fc_idx + 1 < len(tokens) else 1000.0
+                gain = float(tokens[gain_idx + 1].replace("+", "")) if gain_idx != -1 and gain_idx + 1 < len(tokens) else 0.0
+                q = float(tokens[q_idx + 1]) if q_idx != -1 and q_idx + 1 < len(tokens) else 1.0
+
+                if state == "OFF" and gain == 0.0:
+                    continue
+
+                bands.append({
+                    "index": len(bands) + 1,
+                    "type": ftype,
+                    "freq": freq,
+                    "gain": gain,
+                    "q": q,
+                    "enabled": (state == "ON"),
+                })
+            except Exception:
+                continue
+
+    return {
+        "name": name,
+        "description": "Imported from Qudelix-5K text format",
+        "preamp": preamp,
+        "bands": bands,
     }
