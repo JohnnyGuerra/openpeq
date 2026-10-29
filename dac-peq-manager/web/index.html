@@ -210,8 +210,25 @@
             <span id="lblTargetRms" style="color: var(--accent-yellow); font-family: var(--font-mono); font-size: 0.72rem;">(RMS: ±0.0 dB)</span>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.6rem;">
-          <label id="lblToggleTarget" class="checkbox-label" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--bg-card); border-radius: 4px;" title="Toggle original 10-band target reference curve">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+          <!-- Target & Preference Bounds Selector -->
+          <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; background: var(--bg-card); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            <span style="color: var(--text-muted);">Target:</span>
+            <select id="selTargetCurve" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);">
+              <option value="none">None (Off)</option>
+              <option value="harman-2019v2">Harman In-Ear 2019v2</option>
+              <option value="jm-1">JM-1 Modern Target</option>
+              <option value="ief-neutral">IEF Neutral (Crinacle)</option>
+            </select>
+            <span style="color: var(--text-muted); margin-left: 0.3rem;">Bounds:</span>
+            <select id="selPreferenceTolerance" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
+              <option value="1.5">±1.5 dB</option>
+              <option value="2.0" selected>±2.0 dB</option>
+              <option value="3.0">±3.0 dB</option>
+            </select>
+          </div>
+          <button id="btnNormalizeHeadroom" class="quick-tag" style="display: none; padding: 0.15rem 0.5rem; font-size: 0.72rem; color: var(--accent-yellow); border-color: var(--accent-yellow);" title="Normalize positive gains to 0 dBFS to prevent DAC clipping">⚠️ Normalize Headroom</button>
+          <label id="lblToggleTarget" class="checkbox-label" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--bg-card); border-radius: 4px;" title="Toggle original target reference curve & preference envelope">
             <input type="checkbox" id="chkShowTarget" checked>
             <span>Overlay Target</span>
           </label>
@@ -220,6 +237,33 @@
       </div>
       <div class="svg-wrapper">
         <svg id="eqSvg" preserveAspectRatio="none" role="img" aria-label="Parametric EQ Frequency Response Curve"></svg>
+      </div>
+
+      <!-- Ear Canal Resonance Finder & Web Audio Tone Generator -->
+      <div class="tone-generator-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="font-weight: 600; font-size: 0.85rem; color: var(--accent-cyan);">🔊 Resonance Finder (Web Audio)</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Audition pure sine tone through your DAC to pinpoint ear canal resonances (4k-10k)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button id="btnTonePlay" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">▶ Play Tone</button>
+            <button id="btnToneSweep" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">🔄 Auto Sweep (4k-10k)</button>
+            <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band to Tone</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 220px; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 35px;">Freq:</span>
+            <input type="range" id="sliderToneFreq" min="20" max="20000" step="1" value="7000" style="flex: 1;">
+            <span id="lblToneFreq" style="font-family: var(--font-mono); font-size: 0.78rem; min-width: 60px; text-align: right; color: var(--accent-cyan);">7000 Hz</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Volume:</span>
+            <input type="range" id="sliderToneVol" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning">
+            <span id="lblToneVol" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 45px; color: var(--text-muted);">-30 dB</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -321,15 +365,15 @@
           </svg>
           Save Backup JSON
         </button>
-        <label for="fileInputPreset" id="lblLoadPreset" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin: 0;" title="Load custom or backup preset from a JSON file">
+        <label for="fileInputPreset" id="lblLoadPreset" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin: 0;" title="Load preset from JSON, GraphWorks export, Equalizer APO, or CSV">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
-          Load Preset JSON
+          Import / Load Preset
         </label>
-        <input type="file" id="fileInputPreset" accept=".json,application/json" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;" />
+        <input type="file" id="fileInputPreset" accept=".json,.txt,.csv,text/plain,application/json" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;" />
         <button id="btnRestoreStock" class="btn btn-secondary" style="display: none;" title="Restore original hardware factory backup saved for this DAC">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="1 4 1 10 7 10"/>

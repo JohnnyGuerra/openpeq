@@ -213,6 +213,54 @@ def calculate_recommended_preamp(
     return round(rec * 2.0) / 2.0
 
 
+def calculate_headroom_status(
+    bands: Sequence[dict],
+    fs: float = 48000.0,
+) -> Dict[str, Any]:
+    """Inspect composite biquad response for positive gain clipping risks."""
+    peak = calculate_peak_composite_gain(bands, fs=fs)
+    return {
+        "peak_db": round(peak, 2),
+        "is_clipping_risk": peak > 0.05,
+        "recommended_preamp_db": calculate_recommended_preamp(bands, fs=fs),
+        "excess_db": max(0.0, round(peak, 2)),
+    }
+
+
+def normalize_headroom(
+    bands: Sequence[dict],
+    target_peak_db: float = 0.0,
+    fs: float = 48000.0,
+) -> List[dict]:
+    """Normalize band gains so that peak composite response does not exceed target_peak_db.
+
+    Specifically safeguards hardware with the `noPregain` constraint (e.g. Kiwi Ears Allegro Mini)
+    where register 0x66 attenuation cannot be written without corrupting hardware volume.
+    Attenuates/clamps positive band gains until composite response peak <= target_peak_db.
+    """
+    peak = calculate_peak_composite_gain(bands, fs=fs)
+    if peak <= target_peak_db + 0.01:
+        return [dict(b) for b in bands]
+
+    excess = peak - target_peak_db
+    result = []
+    for b in bands:
+        b_copy = dict(b)
+        gain = float(b_copy.get("gain", 0.0))
+        if gain > 0.0:
+            b_copy["gain"] = round(max(0.0, gain - excess), 2)
+        result.append(b_copy)
+
+    new_peak = calculate_peak_composite_gain(result, fs=fs)
+    if new_peak > target_peak_db + 0.01:
+        second_excess = new_peak - target_peak_db
+        for b in result:
+            if b.get("gain", 0.0) > 0.0:
+                b["gain"] = round(max(0.0, b["gain"] - second_excess), 2)
+
+    return result
+
+
 def lint_acoustic_bands(bands: Sequence[dict]) -> List[str]:
     """Inspect PEQ bands for acoustic pitfalls, coupler artifacts, and high-Q issues.
 

@@ -3,12 +3,14 @@
 import math
 import pytest
 from dac_peq.biquad import (
+    calculate_headroom_status,
     calculate_peak_composite_gain,
     calculate_rbj_biquad,
     calculate_recommended_preamp,
     compute_composite_response,
     generate_log_frequencies,
     lint_acoustic_bands,
+    normalize_headroom,
     render_ascii_frequency_response,
 )
 
@@ -295,6 +297,30 @@ def test_decimate_bands_coordinate_descent_refit():
     # Refitting should reduce or equal RMS and pinna RMS error
     assert diff_fitted["rms_db"] <= diff_unfitted["rms_db"]
     assert diff_fitted["pinna_rms_db"] <= diff_unfitted["pinna_rms_db"]
+
+
+def test_headroom_status_and_normalization():
+    """Verify detection of clipping risk and negative attenuation normalization."""
+    boost_bands = [
+        {"type": "LSQ", "freq": 60.0, "gain": 4.5, "q": 0.71},
+        {"type": "PK", "freq": 2500.0, "gain": 3.0, "q": 1.41},
+        {"type": "PK", "freq": 5500.0, "gain": -2.0, "q": 2.0},
+    ]
+
+    status = calculate_headroom_status(boost_bands)
+    assert status["is_clipping_risk"] is True
+    assert status["peak_db"] > 4.0
+    assert status["recommended_preamp_db"] <= -4.5
+
+    # Normalize headroom so peak <= 0 dB
+    normalized = normalize_headroom(boost_bands, target_peak_db=0.0)
+    norm_status = calculate_headroom_status(normalized)
+    assert norm_status["peak_db"] <= 0.05
+    assert norm_status["is_clipping_risk"] is False
+
+    # Negative cuts should be preserved without inverted boost
+    assert normalized[2]["gain"] == -2.0
+
 
 
 

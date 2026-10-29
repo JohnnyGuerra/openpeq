@@ -486,6 +486,175 @@ def export_qudelix(
     return target
 
 
+def parse_parametric_eq(raw_text: str, default_name: str = "imported_peq") -> Dict[str, Any]:
+    """Parse GraphWorks EQ, Equalizer APO, Peace, Squig.link, or CSV parametric EQ configs.
+
+    Extracts preamp and individual biquad filter bands (PK, LSQ, HSQ).
+    Raises ValueError if no valid filters or supported structure is found.
+    """
+    text = raw_text.strip()
+    if not text:
+        raise ValueError("Cannot parse empty configuration.")
+
+    # Check if it's JSON (e.g. Qudelix JSON or Wavelet JSON)
+    if text.startswith("{") and text.endswith("}"):
+        return parse_qudelix_profile(text)
+
+    type_map = {
+        "PK": "PK",
+        "PEAK": "PK",
+        "PEAKING": "PK",
+        "LS": "LSQ",
+        "LSQ": "LSQ",
+        "LOW_SHELF": "LSQ",
+        "LOWSHELF": "LSQ",
+        "HS": "HSQ",
+        "HSQ": "HSQ",
+        "HIGH_SHELF": "HSQ",
+        "HIGHSHELF": "HSQ",
+    }
+
+    lines = text.splitlines()
+    name = default_name
+    description = "Imported parametric EQ configuration"
+    preamp = 0.0
+    bands = []
+
+    for line in lines:
+        raw_line = line.strip()
+        if not raw_line:
+            continue
+
+        # Comments and metadata
+        if raw_line.startswith(("#", "//", ";")):
+            comment_body = raw_line.lstrip("#/; ").strip()
+            if comment_body.lower().startswith(("preset:", "name:", "profile:")):
+                name = comment_body.split(":", 1)[1].strip()
+            elif comment_body.lower().startswith("description:"):
+                description = comment_body.split(":", 1)[1].strip()
+            continue
+
+        # Preamp statements: "Preamp: -3.5 dB" or "Pre-amp: -3.5 dB"
+        lower_line = raw_line.lower()
+        if lower_line.startswith(("preamp:", "pre-amp:", "preamp ", "pre-amp ")):
+            parts = raw_line.split(":", 1)[-1] if ":" in raw_line else raw_line.split(None, 1)[-1]
+            cleaned = parts.replace("dB", "").replace("db", "").replace("+", "").strip()
+            try:
+                preamp = float(cleaned)
+            except ValueError:
+                pass
+            continue
+
+        # Equalizer APO / GraphWorks / Peace line syntax:
+        # e.g.: "Filter 1: ON PK Fc 100.0 Hz Gain +3.0 dB Q 1.41"
+        # or:   "Filter: ON PK Fc 100 Hz Gain 3.0 Q 1.41"
+        if lower_line.startswith("filter"):
+            # Strip "Filter" or "Filter <num>:" prefix
+            content = raw_line
+            if ":" in content:
+                content = content.split(":", 1)[1].strip()
+            else:
+                tokens = content.split()
+                if len(tokens) > 1 and tokens[0].lower() == "filter":
+                    content = " ".join(tokens[1:])
+
+            tokens = content.split()
+            if not tokens:
+                continue
+
+            state = "ON"
+            if tokens[0].upper() in ("ON", "OFF"):
+                state = tokens[0].upper()
+                tokens = tokens[1:]
+
+            if not tokens:
+                continue
+
+            raw_type = tokens[0].upper()
+            ftype = type_map.get(raw_type, "PK")
+
+            # Extract Fc, Gain, Q by looking for keys or position
+            freq = None
+            gain = None
+            q = None
+
+            for i, token in enumerate(tokens):
+                t_lower = token.lower()
+                if t_lower == "fc" and i + 1 < len(tokens):
+                    try:
+                        freq = float(tokens[i + 1].lower().replace("hz", ""))
+                    except ValueError:
+                        pass
+                elif t_lower == "gain" and i + 1 < len(tokens):
+                    try:
+                        gain = float(tokens[i + 1].lower().replace("db", "").replace("+", ""))
+                    except ValueError:
+                        pass
+                elif t_lower == "q" and i + 1 < len(tokens):
+                    try:
+                        q = float(tokens[i + 1])
+                    except ValueError:
+                        pass
+
+            if freq is not None and gain is not None:
+                if state == "OFF" and gain == 0.0:
+                    continue
+                bands.append({
+                    "index": len(bands) + 1,
+                    "type": ftype,
+                    "freq": float(freq),
+                    "gain": float(gain),
+                    "q": float(q if q is not None else 1.0),
+                    "enabled": (state == "ON"),
+                })
+            continue
+
+        # CSV / TSV format: Type, Freq, Gain, Q
+        delimiter = "," if "," in raw_line else ("\t" if "\t" in raw_line else None)
+        if delimiter:
+            parts = [p.strip() for p in raw_line.split(delimiter)]
+            # Skip header line (e.g. "type,freq,gain,q")
+            if any(h in parts[0].lower() for h in ("type", "filter", "freq", "index")):
+                continue
+            try:
+                # Handle possible formats:
+                # [Index, Type, Freq, Gain, Q] or [Type, Freq, Gain, Q] or [Freq, Gain, Q, Type]
+                if len(parts) >= 4:
+                    if parts[0].isdigit() and len(parts) >= 5:
+                        # Index, Type, Freq, Gain, Q
+                        c_type = parts[1].upper()
+                        c_freq = float(parts[2].lower().replace("hz", ""))
+                        c_gain = float(parts[3].lower().replace("db", "").replace("+", ""))
+                        c_q = float(parts[4])
+                    else:
+                        c_type = parts[0].upper()
+                        c_freq = float(parts[1].lower().replace("hz", ""))
+                        c_gain = float(parts[2].lower().replace("db", "").replace("+", ""))
+                        c_q = float(parts[3])
+
+                    ftype = type_map.get(c_type, "PK")
+                    bands.append({
+                        "index": len(bands) + 1,
+                        "type": ftype,
+                        "freq": c_freq,
+                        "gain": c_gain,
+                        "q": c_q,
+                        "enabled": True,
+                    })
+            except (ValueError, IndexError):
+                continue
+
+    if not bands:
+        raise ValueError("No valid parametric EQ filters found in input.")
+
+    return {
+        "name": name,
+        "description": description,
+        "preamp": preamp,
+        "bands": bands,
+    }
+
+
 def parse_qudelix_profile(raw_input: str | Dict[str, Any]) -> Dict[str, Any]:
     """Parse a Qudelix-5K profile (JSON string, parsed dict, or text) into standard dac-peq preset format."""
     if isinstance(raw_input, dict):

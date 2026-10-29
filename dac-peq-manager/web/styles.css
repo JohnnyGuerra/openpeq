@@ -325,6 +325,21 @@ svg {
   opacity: 0.85;
 }
 
+.preference-envelope-path {
+  fill: rgba(168, 85, 247, 0.12);
+  stroke: rgba(168, 85, 247, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4, 3;
+}
+
+.tone-generator-panel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+}
+
 .target-legend {
   display: inline-flex;
   align-items: center;

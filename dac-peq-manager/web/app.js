@@ -11,6 +11,8 @@ import {
   generateLogFrequencies,
   calculatePeakCompositeGain,
   calculateRecommendedPreamp,
+  calculateHeadroomStatus,
+  normalizeHeadroom,
   lintAcousticBands,
   decimateBands,
 } from "./modules/biquad_math.js";
@@ -20,6 +22,7 @@ import {
   formatEqualizerApo,
   formatWaveletGraphicEq,
   formatQudelixJson,
+  parseParametricEq,
 } from "./modules/exporters.js";
 
 import {
@@ -241,6 +244,8 @@ function renderCurve() {
   let rmsDiff = 0.0;
   let maxDelta = 0.0;
   let maxDeltaFreq = 1000.0;
+  const selTolerance = document.getElementById("selPreferenceTolerance");
+  const preferenceToleranceDb = selTolerance ? parseFloat(selTolerance.value) || 2.0 : 2.0;
 
   if (referenceTargetCurve && referenceTargetCurve.bands && referenceTargetCurve.bands.length > 0) {
     const refResponses = computeCompositeCurve(
@@ -250,17 +255,42 @@ function renderCurve() {
     );
 
     let sumSq = 0.0;
+    let inBoundsCount = 0;
     for (let i = 0; i < frequencies.length; i++) {
       const delta = responses[i] - refResponses[i];
       sumSq += delta * delta;
+      if (Math.abs(delta) <= preferenceToleranceDb) {
+        inBoundsCount++;
+      }
       if (Math.abs(delta) > Math.abs(maxDelta)) {
         maxDelta = delta;
         maxDeltaFreq = frequencies[i];
       }
     }
     rmsDiff = Math.sqrt(sumSq / frequencies.length);
+    const inBoundsPct = Math.round((inBoundsCount / frequencies.length) * 100);
 
     if (showTargetOverlay) {
+      // 1. Preference Tolerance Envelope Shading (Polygon)
+      let envPathD = "";
+      frequencies.forEach((f, i) => {
+        const x = xForFreq(f, width);
+        const yTop = yForDb(refResponses[i] + preferenceToleranceDb, height);
+        envPathD += (i === 0 ? "M " : "L ") + x.toFixed(1) + " " + yTop.toFixed(1) + " ";
+      });
+      for (let i = frequencies.length - 1; i >= 0; i--) {
+        const x = xForFreq(frequencies[i], width);
+        const yBot = yForDb(refResponses[i] - preferenceToleranceDb, height);
+        envPathD += "L " + x.toFixed(1) + " " + yBot.toFixed(1) + " ";
+      }
+      envPathD += "Z";
+
+      const envCurvePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      envCurvePath.setAttribute("d", envPathD);
+      envCurvePath.setAttribute("class", "preference-envelope-path");
+      svg.appendChild(envCurvePath);
+
+      // 2. Reference Target Line
       let refPathD = "";
       frequencies.forEach((f, i) => {
         const x = xForFreq(f, width);
@@ -289,7 +319,7 @@ function renderCurve() {
       lblTargetName.textContent = referenceTargetCurve.name || "Target Reference";
       if (showTargetOverlay) {
         const freqText = maxDeltaFreq >= 1000 ? (maxDeltaFreq / 1000).toFixed(1) + " kHz" : Math.round(maxDeltaFreq) + " Hz";
-        lblTargetRms.textContent = `(RMS: ±${rmsDiff.toFixed(1)} dB | Peak Δ: ${maxDelta > 0 ? "+" : ""}${maxDelta.toFixed(1)} dB @ ${freqText})`;
+        lblTargetRms.textContent = `(RMS: ±${rmsDiff.toFixed(1)} dB | Envelope ±${preferenceToleranceDb.toFixed(1)} dB | Peak Δ: ${maxDelta > 0 ? "+" : ""}${maxDelta.toFixed(1)} dB @ ${freqText})`;
       } else {
         lblTargetRms.textContent = "(Overlay Hidden)";
       }
@@ -297,6 +327,18 @@ function renderCurve() {
     } else {
       targetLegend.style.display = "none";
       lblToggleTarget.style.display = "none";
+    }
+  }
+
+  // Headroom Clipping Guard Check
+  const btnNormalize = document.getElementById("btnNormalizeHeadroom");
+  const headroom = calculateHeadroomStatus(currentPreset.bands);
+  if (btnNormalize) {
+    if (headroom.is_clipping_risk) {
+      btnNormalize.style.display = "inline-flex";
+      btnNormalize.textContent = `⚠️ Peak +${headroom.peak_db.toFixed(1)} dB (Normalize)`;
+    } else {
+      btnNormalize.style.display = "none";
     }
   }
 
@@ -1724,12 +1766,18 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (jsonErr) {
+        // Fall back to GraphWorks / Equalizer APO / Peace / CSV parser
+        parsed = parseParametricEq(text, file.name.replace(/\.[^/.]+$/, ""));
+      }
       if (!parsed || !Array.isArray(parsed.bands)) {
         throw new Error("Invalid preset format: missing 'bands' array.");
       }
       currentPreset = {
-        name: parsed.name || file.name.replace(/\.json$/i, ""),
+        name: parsed.name || file.name.replace(/\.[^/.]+$/, ""),
         slug: (parsed.slug || file.name.replace(/[^a-z0-9_-]/gi, "_")).toLowerCase(),
         description: parsed.description || "Imported custom PEQ preset",
         preamp: typeof parsed.preamp === "number" ? parsed.preamp : 0.0,
@@ -1755,11 +1803,24 @@ window.addEventListener("DOMContentLoaded", () => {
           }
         }
       }
-      activeHardwareBands = Math.min(Math.max(currentPreset.bands.length, 5), 9);
+      if (currentPreset.bands.length > activeHardwareBands) {
+        currentPreset.fullBands = [...currentPreset.bands];
+        referenceTargetCurve = {
+          name: `${currentPreset.name} (${currentPreset.bands.length}-Band Target)`,
+          bands: [...currentPreset.bands],
+          preamp: currentPreset.preamp,
+        };
+        showTargetOverlay = true;
+        currentPreset.bands = decimateBands(currentPreset.bands, activeHardwareBands);
+        showToast(`Imported ${currentPreset.fullBands.length}-band curve: optimized into ${activeHardwareBands} hardware biquads.`);
+      } else {
+        referenceTargetCurve = null;
+        showToast(`Loaded preset "${currentPreset.name}" (${currentPreset.bands.length} bands)`);
+      }
+
       buildControlsUI();
       renderCurve();
       triggerAutoApply();
-      showToast(`Loaded preset "${currentPreset.name}" (Slot ${parsed.slot_id || document.getElementById("selHardwareSlot")?.value || 3})`);
     } catch (err) {
       console.error("Load preset error:", err);
       showToast(`Failed to load preset: ${err.message}`);
@@ -1828,7 +1889,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Target Curve Overlay Toggle
+  // Target Curve Overlay Toggle & Preference Bounds Controls
   const chkShowTarget = document.getElementById("chkShowTarget");
   if (chkShowTarget) {
     chkShowTarget.addEventListener("change", (e) => {
@@ -1836,6 +1897,197 @@ window.addEventListener("DOMContentLoaded", () => {
       renderCurve();
     });
   }
+
+  const selTargetCurve = document.getElementById("selTargetCurve");
+  if (selTargetCurve) {
+    selTargetCurve.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (val === "none" || !PRESETS[val]) {
+        referenceTargetCurve = null;
+      } else {
+        referenceTargetCurve = PRESETS[val];
+      }
+      renderCurve();
+    });
+  }
+
+  const selPreferenceTolerance = document.getElementById("selPreferenceTolerance");
+  if (selPreferenceTolerance) {
+    selPreferenceTolerance.addEventListener("change", () => renderCurve());
+  }
+
+  const btnNormalizeHeadroom = document.getElementById("btnNormalizeHeadroom");
+  if (btnNormalizeHeadroom) {
+    btnNormalizeHeadroom.addEventListener("click", () => {
+      currentPreset.bands = normalizeHeadroom(currentPreset.bands, 0.0);
+      populateControls();
+      renderCurve();
+      triggerAutoApply();
+      showToast("Headroom normalized: Positive boosts attenuated to 0 dBFS.");
+    });
+  }
+
+  // ── Web Audio Tone Generator & Resonance Sweep Tool ─────────────────────
+  let toneCtx = null;
+  let toneOsc = null;
+  let toneGain = null;
+  let isToneActive = false;
+  let sweepInterval = null;
+
+  function initToneAudio() {
+    if (!toneCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      toneCtx = new AudioCtx();
+    }
+    if (toneCtx.state === "suspended") {
+      toneCtx.resume();
+    }
+  }
+
+  function startTone(freq = 7000) {
+    initToneAudio();
+    stopTone();
+
+    toneOsc = toneCtx.createOscillator();
+    toneGain = toneCtx.createGain();
+
+    toneOsc.type = "sine";
+    toneOsc.frequency.setValueAtTime(freq, toneCtx.currentTime);
+
+    const sliderVol = document.getElementById("sliderToneVol");
+    const vol = sliderVol ? parseFloat(sliderVol.value) || 0.03 : 0.03;
+    toneGain.gain.setValueAtTime(0.0001, toneCtx.currentTime);
+    toneGain.gain.exponentialRampToValueAtTime(vol, toneCtx.currentTime + 0.04);
+
+    toneOsc.connect(toneGain);
+    toneGain.connect(toneCtx.destination);
+
+    toneOsc.start();
+    isToneActive = true;
+
+    const btnPlay = document.getElementById("btnTonePlay");
+    if (btnPlay) {
+      btnPlay.textContent = "⏹ Stop Tone";
+      btnPlay.classList.add("active");
+    }
+  }
+
+  function stopTone() {
+    if (sweepInterval) {
+      clearInterval(sweepInterval);
+      sweepInterval = null;
+      const btnSweep = document.getElementById("btnToneSweep");
+      if (btnSweep) {
+        btnSweep.textContent = "🔄 Auto Sweep (4k-10k)";
+        btnSweep.classList.remove("active");
+      }
+    }
+    if (toneOsc) {
+      try {
+        toneGain?.gain.linearRampToValueAtTime(0.0001, toneCtx.currentTime + 0.03);
+        setTimeout(() => {
+          try {
+            toneOsc?.stop();
+            toneOsc?.disconnect();
+          } catch (e) {}
+          toneOsc = null;
+        }, 35);
+      } catch (err) {
+        try { toneOsc.stop(); } catch (e) {}
+        toneOsc = null;
+      }
+    }
+    isToneActive = false;
+    const btnPlay = document.getElementById("btnTonePlay");
+    if (btnPlay) {
+      btnPlay.textContent = "▶ Play Tone";
+      btnPlay.classList.remove("active");
+    }
+  }
+
+  const sliderToneFreq = document.getElementById("sliderToneFreq");
+  const lblToneFreq = document.getElementById("lblToneFreq");
+  if (sliderToneFreq) {
+    sliderToneFreq.addEventListener("input", (e) => {
+      const f = parseFloat(e.target.value);
+      if (lblToneFreq) lblToneFreq.textContent = `${Math.round(f)} Hz`;
+      if (toneOsc && toneCtx && isToneActive) {
+        toneOsc.frequency.setValueAtTime(f, toneCtx.currentTime);
+      }
+    });
+  }
+
+  const sliderToneVol = document.getElementById("sliderToneVol");
+  const lblToneVol = document.getElementById("lblToneVol");
+  if (sliderToneVol) {
+    sliderToneVol.addEventListener("input", (e) => {
+      const v = parseFloat(e.target.value);
+      const db = 20 * Math.log10(v);
+      if (lblToneVol) lblToneVol.textContent = `${db.toFixed(0)} dB`;
+      if (toneGain && toneCtx && isToneActive) {
+        toneGain.gain.setValueAtTime(v, toneCtx.currentTime);
+      }
+    });
+  }
+
+  document.getElementById("btnTonePlay")?.addEventListener("click", () => {
+    if (isToneActive) {
+      stopTone();
+    } else {
+      const f = sliderToneFreq ? parseFloat(sliderToneFreq.value) || 7000 : 7000;
+      startTone(f);
+    }
+  });
+
+  document.getElementById("btnToneSweep")?.addEventListener("click", () => {
+    const btnSweep = document.getElementById("btnToneSweep");
+    if (sweepInterval) {
+      stopTone();
+      return;
+    }
+    startTone(4000);
+    if (btnSweep) {
+      btnSweep.textContent = "⏹ Stop Sweep";
+      btnSweep.classList.add("active");
+    }
+
+    let currentSweepFreq = 4000;
+    const endFreq = 10000;
+    const stepRatio = Math.pow(endFreq / 4000, 1 / 120);
+
+    sweepInterval = setInterval(() => {
+      currentSweepFreq *= stepRatio;
+      if (currentSweepFreq >= endFreq) {
+        currentSweepFreq = 4000;
+      }
+      if (sliderToneFreq) sliderToneFreq.value = Math.round(currentSweepFreq);
+      if (lblToneFreq) lblToneFreq.textContent = `${Math.round(currentSweepFreq)} Hz`;
+      if (toneOsc && toneCtx && isToneActive) {
+        toneOsc.frequency.setValueAtTime(currentSweepFreq, toneCtx.currentTime);
+      }
+    }, 50);
+  });
+
+  document.getElementById("btnSnapBand")?.addEventListener("click", () => {
+    const currentFreq = sliderToneFreq ? parseFloat(sliderToneFreq.value) || 7000 : 7000;
+    if (!currentPreset.bands || currentPreset.bands.length === 0) return;
+
+    let closestIdx = 0;
+    let minDiff = Infinity;
+    currentPreset.bands.forEach((b, i) => {
+      const diff = Math.abs(b.freq - currentFreq);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = i;
+      }
+    });
+
+    currentPreset.bands[closestIdx].freq = Math.round(currentFreq);
+    populateControls();
+    renderCurve();
+    triggerAutoApply();
+    showToast(`Band ${closestIdx + 1} snapped to ${Math.round(currentFreq)} Hz`);
+  });
 
   // DAC Hardware Database Directory
   loadDacDatabase();

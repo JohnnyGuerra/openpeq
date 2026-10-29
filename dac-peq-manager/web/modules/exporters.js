@@ -174,3 +174,181 @@ export function formatQudelixText(preset, bands, isFull = false) {
   }
   return txt;
 }
+
+/**
+ * Universal Parametric EQ text / GraphWorks / Equalizer APO / CSV parser for Web client.
+ */
+export function parseParametricEq(rawText, defaultName = "imported_peq") {
+  const text = (rawText || "").trim();
+  if (!text) {
+    throw new Error("Cannot parse empty configuration.");
+  }
+
+  // Handle JSON profile (e.g. Qudelix JSON)
+  if (text.startsWith("{") && text.endsWith("}")) {
+    try {
+      const data = JSON.parse(text);
+      const name = data.profile_name || data.name || defaultName;
+      const preamp = Number(data.preamp_db ?? data.preamp ?? 0.0);
+      const rawBands = data.eq_list || data.bands || [];
+      const typeMap = {
+        PEAK: "PK", PEAKING: "PK", PK: "PK",
+        LOW_SHELF: "LSQ", LOWSHELF: "LSQ", LSQ: "LSQ", LS: "LSQ",
+        HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ", HSQ: "HSQ", HS: "HSQ",
+      };
+      const bands = [];
+      rawBands.forEach((b, i) => {
+        const enabled = b.enable !== 0 && b.enabled !== false;
+        const gain = Number(b.gain || 0.0);
+        if (!enabled && gain === 0.0) return;
+        const ftype = typeMap[String(b.type || "PEAK").toUpperCase()] || "PK";
+        bands.push({
+          index: i + 1,
+          type: ftype,
+          freq: Number(b.freq || 1000.0),
+          gain: gain,
+          q: Number(b.q || 1.0),
+          enabled: enabled,
+        });
+      });
+      return {
+        name,
+        description: data.description || "Imported JSON profile",
+        preamp,
+        bands,
+      };
+    } catch (e) {
+      // Fall through to text parsing if JSON parse failed
+    }
+  }
+
+  const typeMap = {
+    PK: "PK", PEAK: "PK", PEAKING: "PK",
+    LS: "LSQ", LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ",
+    HS: "HSQ", HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ",
+  };
+
+  const lines = text.split(/\r?\n/);
+  let name = defaultName;
+  let description = "Imported parametric EQ configuration";
+  let preamp = 0.0;
+  const bands = [];
+
+  for (let rawLine of lines) {
+    rawLine = rawLine.trim();
+    if (!rawLine) continue;
+
+    if (rawLine.startsWith("#") || rawLine.startsWith("//") || rawLine.startsWith(";")) {
+      const commentBody = rawLine.replace(/^[#\/;]+\s*/, "");
+      const lower = commentBody.toLowerCase();
+      if (lower.startsWith("preset:") || lower.startsWith("name:") || lower.startsWith("profile:")) {
+        name = commentBody.split(":")[1].trim();
+      } else if (lower.startsWith("description:")) {
+        description = commentBody.split(":")[1].trim();
+      }
+      continue;
+    }
+
+    const lowerLine = rawLine.toLowerCase();
+    if (lowerLine.startsWith("preamp:") || lowerLine.startsWith("pre-amp:") || lowerLine.startsWith("preamp ") || lowerLine.startsWith("pre-amp ")) {
+      const parts = rawLine.includes(":") ? rawLine.split(":")[1] : rawLine.split(/\s+/).slice(1).join(" ");
+      const val = parseFloat(parts.replace(/dB/gi, "").replace(/\+/g, "").trim());
+      if (!isNaN(val)) preamp = val;
+      continue;
+    }
+
+    if (lowerLine.startsWith("filter")) {
+      let content = rawLine;
+      if (content.includes(":")) {
+        content = content.split(":")[1].trim();
+      } else {
+        const tokens = content.split(/\s+/);
+        if (tokens.length > 1 && tokens[0].toLowerCase() === "filter") {
+          content = tokens.slice(1).join(" ");
+        }
+      }
+
+      let tokens = content.split(/\s+/);
+      if (!tokens.length) continue;
+
+      let state = "ON";
+      if (["ON", "OFF"].includes(tokens[0].toUpperCase())) {
+        state = tokens[0].toUpperCase();
+        tokens = tokens.slice(1);
+      }
+      if (!tokens.length) continue;
+
+      const rawType = tokens[0].toUpperCase();
+      const ftype = typeMap[rawType] || "PK";
+
+      let freq = null, gain = null, q = null;
+      for (let i = 0; i < tokens.length; i++) {
+        const tLower = tokens[i].toLowerCase();
+        if (tLower === "fc" && i + 1 < tokens.length) {
+          freq = parseFloat(tokens[i + 1].toLowerCase().replace("hz", ""));
+        } else if (tLower === "gain" && i + 1 < tokens.length) {
+          gain = parseFloat(tokens[i + 1].toLowerCase().replace(/db|\+/gi, ""));
+        } else if (tLower === "q" && i + 1 < tokens.length) {
+          q = parseFloat(tokens[i + 1]);
+        }
+      }
+
+      if (freq !== null && !isNaN(freq) && gain !== null && !isNaN(gain)) {
+        if (state === "OFF" && gain === 0.0) continue;
+        bands.push({
+          index: bands.length + 1,
+          type: ftype,
+          freq: Number(freq),
+          gain: Number(gain),
+          q: q !== null && !isNaN(q) ? Number(q) : 1.0,
+          enabled: state === "ON",
+        });
+      }
+      continue;
+    }
+
+    // CSV / TSV fallback
+    const delimiter = rawLine.includes(",") ? "," : (rawLine.includes("\t") ? "\t" : null);
+    if (delimiter) {
+      const parts = rawLine.split(delimiter).map(p => p.trim());
+      if (["type", "filter", "freq", "index"].some(h => parts[0].toLowerCase().includes(h))) continue;
+      try {
+        let cType, cFreq, cGain, cQ;
+        if (/^\d+$/.test(parts[0]) && parts.length >= 5) {
+          cType = parts[1].toUpperCase();
+          cFreq = parseFloat(parts[2].toLowerCase().replace("hz", ""));
+          cGain = parseFloat(parts[3].toLowerCase().replace(/db|\+/gi, ""));
+          cQ = parseFloat(parts[4]);
+        } else if (parts.length >= 4) {
+          cType = parts[0].toUpperCase();
+          cFreq = parseFloat(parts[1].toLowerCase().replace("hz", ""));
+          cGain = parseFloat(parts[2].toLowerCase().replace(/db|\+/gi, ""));
+          cQ = parseFloat(parts[3]);
+        }
+        if (!isNaN(cFreq) && !isNaN(cGain) && !isNaN(cQ)) {
+          bands.push({
+            index: bands.length + 1,
+            type: typeMap[cType] || "PK",
+            freq: Number(cFreq),
+            gain: Number(cGain),
+            q: Number(cQ),
+            enabled: true,
+          });
+        }
+      } catch (err) {
+        // ignore malformed line
+      }
+    }
+  }
+
+  if (!bands.length) {
+    throw new Error("No valid parametric EQ filters found in input.");
+  }
+
+  return {
+    name,
+    description,
+    preamp,
+    bands,
+  };
+}

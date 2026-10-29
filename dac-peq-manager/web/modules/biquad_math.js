@@ -112,6 +112,45 @@ export function calculateRecommendedPreamp(bands, headroom = 0.5, fs = 48000.0) 
   return Math.round(rec * 2.0) / 2.0;
 }
 
+export function calculateHeadroomStatus(bands, fs = 48000.0) {
+  const peak = calculatePeakCompositeGain(bands, 500, fs);
+  return {
+    peak_db: Number(peak.toFixed(2)),
+    is_clipping_risk: peak > 0.05,
+    recommended_preamp_db: calculateRecommendedPreamp(bands, 0.5, fs),
+    excess_db: Number(Math.max(0.0, peak).toFixed(2)),
+  };
+}
+
+export function normalizeHeadroom(bands, targetPeakDb = 0.0, fs = 48000.0) {
+  const peak = calculatePeakCompositeGain(bands, 500, fs);
+  if (peak <= targetPeakDb + 0.01) {
+    return bands.map((b) => ({ ...b }));
+  }
+
+  const excess = peak - targetPeakDb;
+  const result = bands.map((b) => {
+    const copy = { ...b };
+    const gain = Number(copy.gain || 0.0);
+    if (gain > 0.0) {
+      copy.gain = Number(Math.max(0.0, gain - excess).toFixed(2));
+    }
+    return copy;
+  });
+
+  const newPeak = calculatePeakCompositeGain(result, 500, fs);
+  if (newPeak > targetPeakDb + 0.01) {
+    const secondExcess = newPeak - targetPeakDb;
+    result.forEach((b) => {
+      if (b.gain > 0.0) {
+        b.gain = Number(Math.max(0.0, b.gain - secondExcess).toFixed(2));
+      }
+    });
+  }
+
+  return result;
+}
+
 export function calculateCurveDifference(bandsA, preampA, bandsB, preampB, fs = 48000.0, points = 220) {
   const frequencies = generateLogFrequencies(points, 20.0, 20000.0);
   const curveA = computeCompositeCurve(bandsA, preampA, frequencies, fs);

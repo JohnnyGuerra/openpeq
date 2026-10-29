@@ -13,6 +13,7 @@ from dac_peq.exporters import (
     format_qudelix_text,
     format_wavelet_graphiceq,
     format_wavelet_json,
+    parse_parametric_eq,
     parse_qudelix_profile,
 )
 
@@ -202,5 +203,69 @@ def test_auto_preamp_anti_clipping_guard():
     # Qudelix auto-preamp
     q5k_guarded = format_qudelix_json(boost_preset, auto_preamp=True)
     assert q5k_guarded["preamp_db"] < 0.0
+
+
+def test_parse_parametric_eq_graphworks_format():
+    """Verify parsing standard GraphWorks / Equalizer APO export formats."""
+    raw_graphworks = """# Preset: Simgot SuperMix 4 Diffuse Field Target
+# Description: GraphWorks 5128 Target Compensation
+Preamp: -3.8 dB
+Filter 1: ON LSQ Fc 85.0 Hz Gain +4.2 dB Q 0.71
+Filter 2: ON PK Fc 220.0 Hz Gain -1.8 dB Q 1.40
+Filter 3: ON PK Fc 2800.0 Hz Gain +2.5 dB Q 2.00
+Filter 4: ON PK Fc 5600.0 Hz Gain -3.0 dB Q 3.20
+Filter 5: ON HSQ Fc 11500.0 Hz Gain -1.5 dB Q 0.70
+Filter 6: OFF PK Fc 1000.0 Hz Gain 0.0 dB Q 1.00
+"""
+    parsed = parse_parametric_eq(raw_graphworks)
+    assert parsed["name"] == "Simgot SuperMix 4 Diffuse Field Target"
+    assert parsed["preamp"] == -3.8
+    assert len(parsed["bands"]) == 5  # Disabled 0.0 dB filter excluded
+    assert parsed["bands"][0]["type"] == "LSQ"
+    assert parsed["bands"][0]["freq"] == 85.0
+    assert parsed["bands"][0]["gain"] == 4.2
+    assert parsed["bands"][0]["q"] == 0.71
+    assert parsed["bands"][4]["type"] == "HSQ"
+    assert parsed["bands"][4]["freq"] == 11500.0
+
+
+def test_parse_parametric_eq_no_index_and_csv():
+    """Verify parsing unindexed filters and CSV tabular formats."""
+    # Unindexed filter lines
+    apo_unindexed = """
+Pre-amp: -2.0 dB
+Filter: ON PK Fc 150.0 Hz Gain -3.0 dB Q 1.5
+Filter: ON PK Fc 3200 Hz Gain 2.0 Q 2.5
+"""
+    parsed = parse_parametric_eq(apo_unindexed)
+    assert parsed["preamp"] == -2.0
+    assert len(parsed["bands"]) == 2
+    assert parsed["bands"][0]["freq"] == 150.0
+    assert parsed["bands"][0]["gain"] == -3.0
+    assert parsed["bands"][1]["freq"] == 3200.0
+    assert parsed["bands"][1]["gain"] == 2.0
+
+    # CSV format
+    csv_text = """Type, Frequency, Gain, Q
+LSQ, 60.0, 5.0, 0.71
+PK, 1200.0, -2.5, 1.41
+HSQ, 8000.0, -1.0, 0.71
+"""
+    parsed_csv = parse_parametric_eq(csv_text)
+    assert len(parsed_csv["bands"]) == 3
+    assert parsed_csv["bands"][0]["type"] == "LSQ"
+    assert parsed_csv["bands"][1]["freq"] == 1200.0
+    assert parsed_csv["bands"][2]["type"] == "HSQ"
+
+
+def test_parse_parametric_eq_invalid():
+    """Verify appropriate error on invalid or empty configs."""
+    import pytest
+    with pytest.raises(ValueError, match="Cannot parse empty"):
+        parse_parametric_eq("   ")
+
+    with pytest.raises(ValueError, match="No valid parametric EQ filters"):
+        parse_parametric_eq("# Only comments\n# Nothing else here\n")
+
 
 
