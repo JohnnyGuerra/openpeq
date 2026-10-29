@@ -3,6 +3,7 @@
 [![CI](https://github.com/JohnnyGuerra/dac-peq-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnnyGuerra/dac-peq-manager/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/JohnnyGuerra/dac-peq-manager?color=10b981&label=Release&style=flat-square)](https://github.com/JohnnyGuerra/dac-peq-manager/releases)
 [![Stars](https://img.shields.io/github/stars/JohnnyGuerra/dac-peq-manager?style=flat-square&color=38bdf8)](https://github.com/JohnnyGuerra/dac-peq-manager/stargazers)
+[![Growth Dashboard](https://img.shields.io/badge/Analytics-Growth_Dashboard-10b981?style=flat-square&logo=github)](./metrics/GROWTH.md)
 [![WebHID Flasher](https://img.shields.io/badge/Web_Flasher-Live_on_Pages-3b82f6?style=flat-square&logo=googlechrome&logoColor=white)](https://johnnyguerra.github.io/dac-peq-manager/)
 [![Rust WASM](https://img.shields.io/badge/Engine-Rust_WASM-f97316?style=flat-square&logo=rust&logoColor=white)](https://github.com/JohnnyGuerra/dac-peq-manager)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
