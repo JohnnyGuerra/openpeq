@@ -38,7 +38,7 @@ body:
     id: test_checklist
     attributes:
       label: Test Checklist
-      items:
+      options:
         - label: "Device connected successfully via WebHID or CLI"
         - label: "Read Current PEQ from DAC returned valid bands"
         - label: "Apply to Live RAM altered sound in real time"

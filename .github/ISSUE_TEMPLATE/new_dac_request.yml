@@ -42,6 +42,6 @@ body:
     id: loaner_option
     attributes:
       label: Hardware Availability
-      items:
+      options:
         - label: "I own this device and am able to test experimental code / PRs"
         - label: "I am willing to send a loaner dongle for reverse engineering"
