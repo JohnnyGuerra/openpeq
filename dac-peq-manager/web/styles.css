@@ -340,6 +340,54 @@ svg {
   margin-top: 0.75rem;
 }
 
+.generator-guide-dialog {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-md);
+  background: #0b1120;
+  color: var(--text-primary);
+  max-width: 640px;
+  width: 92%;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.15);
+  margin: auto;
+}
+
+.generator-guide-dialog::backdrop {
+  background: rgba(3, 7, 18, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.guide-step-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.guide-step-card h4 {
+  font-size: 0.88rem;
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.guide-step-card p, .guide-step-card ul {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.guide-step-card ul {
+  margin-top: 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.guide-step-card li {
+  margin-bottom: 0.25rem;
+}
+
 .target-legend {
   display: inline-flex;
   align-items: center;

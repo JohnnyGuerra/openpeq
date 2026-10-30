@@ -1931,7 +1931,9 @@ window.addEventListener("DOMContentLoaded", () => {
   let toneCtx = null;
   let toneOsc = null;
   let toneGain = null;
+  let noiseNode = null;
   let isToneActive = false;
+  let isNoiseActive = false;
   let sweepInterval = null;
 
   function initToneAudio() {
@@ -1946,7 +1948,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function startTone(freq = 7000) {
     initToneAudio();
-    stopTone();
+    stopAudioGenerators();
 
     toneOsc = toneCtx.createOscillator();
     toneGain = toneCtx.createGain();
@@ -1967,24 +1969,74 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const btnPlay = document.getElementById("btnTonePlay");
     if (btnPlay) {
-      btnPlay.textContent = "⏹ Stop Tone";
+      btnPlay.textContent = "⏹ Stop Sine";
       btnPlay.classList.add("active");
     }
   }
 
-  function stopTone() {
+  function startPinkNoise() {
+    initToneAudio();
+    stopAudioGenerators();
+
+    // Generate 5 seconds of looped Paul Kellet pink noise buffer
+    const bufferSize = toneCtx.sampleRate * 5;
+    const noiseBuffer = toneCtx.createBuffer(1, bufferSize, toneCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.075;
+      b6 = white * 0.115926;
+    }
+
+    noiseNode = toneCtx.createBufferSource();
+    noiseNode.buffer = noiseBuffer;
+    noiseNode.loop = true;
+
+    toneGain = toneCtx.createGain();
+    const sliderVol = document.getElementById("sliderToneVol");
+    const vol = sliderVol ? parseFloat(sliderVol.value) || 0.03 : 0.03;
+    toneGain.gain.setValueAtTime(0.0001, toneCtx.currentTime);
+    toneGain.gain.exponentialRampToValueAtTime(vol * 1.2, toneCtx.currentTime + 0.05);
+
+    noiseNode.connect(toneGain);
+    toneGain.connect(toneCtx.destination);
+    noiseNode.start();
+    isNoiseActive = true;
+
+    const btnNoise = document.getElementById("btnPinkNoise");
+    if (btnNoise) {
+      btnNoise.textContent = "⏹ Stop Noise";
+      btnNoise.classList.add("active");
+    }
+  }
+
+  function stopAudioGenerators() {
     if (sweepInterval) {
       clearInterval(sweepInterval);
       sweepInterval = null;
       const btnSweep = document.getElementById("btnToneSweep");
       if (btnSweep) {
-        btnSweep.textContent = "🔄 Auto Sweep (4k-10k)";
+        btnSweep.textContent = "🔄 Sweep (4k-10k)";
         btnSweep.classList.remove("active");
       }
     }
+
+    if (toneGain && toneCtx) {
+      try {
+        toneGain.gain.linearRampToValueAtTime(0.0001, toneCtx.currentTime + 0.03);
+      } catch (e) {}
+    }
+
     if (toneOsc) {
       try {
-        toneGain?.gain.linearRampToValueAtTime(0.0001, toneCtx.currentTime + 0.03);
         setTimeout(() => {
           try {
             toneOsc?.stop();
@@ -1997,11 +2049,35 @@ window.addEventListener("DOMContentLoaded", () => {
         toneOsc = null;
       }
     }
+
+    if (noiseNode) {
+      try {
+        setTimeout(() => {
+          try {
+            noiseNode?.stop();
+            noiseNode?.disconnect();
+          } catch (e) {}
+          noiseNode = null;
+        }, 35);
+      } catch (err) {
+        try { noiseNode.stop(); } catch (e) {}
+        noiseNode = null;
+      }
+    }
+
     isToneActive = false;
+    isNoiseActive = false;
+
     const btnPlay = document.getElementById("btnTonePlay");
     if (btnPlay) {
-      btnPlay.textContent = "▶ Play Tone";
+      btnPlay.textContent = "▶ Sine Tone";
       btnPlay.classList.remove("active");
+    }
+
+    const btnNoise = document.getElementById("btnPinkNoise");
+    if (btnNoise) {
+      btnNoise.textContent = "📻 Pink Noise";
+      btnNoise.classList.remove("active");
     }
   }
 
@@ -2024,25 +2100,33 @@ window.addEventListener("DOMContentLoaded", () => {
       const v = parseFloat(e.target.value);
       const db = 20 * Math.log10(v);
       if (lblToneVol) lblToneVol.textContent = `${db.toFixed(0)} dB`;
-      if (toneGain && toneCtx && isToneActive) {
-        toneGain.gain.setValueAtTime(v, toneCtx.currentTime);
+      if (toneGain && toneCtx && (isToneActive || isNoiseActive)) {
+        toneGain.gain.setValueAtTime(isNoiseActive ? v * 1.2 : v, toneCtx.currentTime);
       }
     });
   }
 
   document.getElementById("btnTonePlay")?.addEventListener("click", () => {
     if (isToneActive) {
-      stopTone();
+      stopAudioGenerators();
     } else {
       const f = sliderToneFreq ? parseFloat(sliderToneFreq.value) || 7000 : 7000;
       startTone(f);
     }
   });
 
+  document.getElementById("btnPinkNoise")?.addEventListener("click", () => {
+    if (isNoiseActive) {
+      stopAudioGenerators();
+    } else {
+      startPinkNoise();
+    }
+  });
+
   document.getElementById("btnToneSweep")?.addEventListener("click", () => {
     const btnSweep = document.getElementById("btnToneSweep");
     if (sweepInterval) {
-      stopTone();
+      stopAudioGenerators();
       return;
     }
     startTone(4000);
@@ -2066,6 +2150,22 @@ window.addEventListener("DOMContentLoaded", () => {
         toneOsc.frequency.setValueAtTime(currentSweepFreq, toneCtx.currentTime);
       }
     }, 50);
+  });
+
+  // Generator Guide Dialog Handlers
+  const toneGuideDialog = document.getElementById("toneGuideDialog");
+  document.getElementById("btnOpenToneGuide")?.addEventListener("click", () => {
+    if (toneGuideDialog) {
+      toneGuideDialog.showModal();
+    }
+  });
+
+  document.getElementById("btnCloseToneGuide")?.addEventListener("click", () => {
+    toneGuideDialog?.close();
+  });
+
+  document.getElementById("btnGotItToneGuide")?.addEventListener("click", () => {
+    toneGuideDialog?.close();
   });
 
   document.getElementById("btnSnapBand")?.addEventListener("click", () => {

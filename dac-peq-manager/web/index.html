@@ -242,30 +242,75 @@
       <!-- Ear Canal Resonance Finder & Web Audio Tone Generator -->
       <div class="tone-generator-panel">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="font-weight: 600; font-size: 0.85rem; color: var(--accent-cyan);">🔊 Resonance Finder (Web Audio)</span>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Audition pure sine tone through your DAC to pinpoint ear canal resonances (4k-10k)</span>
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: 0.85rem; color: var(--accent-cyan);">🔊 Resonance & Tonal Generator</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Audition pure sine sweep or pink noise through your DAC</span>
+            <button id="btnOpenToneGuide" class="quick-tag" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; color: var(--accent-cyan); border-color: rgba(56, 189, 248, 0.4);" title="Open step-by-step user guide for Sine Sweep and Pink Noise">❓ How to Use</button>
           </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <button id="btnTonePlay" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">▶ Play Tone</button>
-            <button id="btnToneSweep" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;">🔄 Auto Sweep (4k-10k)</button>
-            <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band to Tone</button>
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.1rem;">
+              <button id="btnTonePlay" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;">▶ Sine Tone</button>
+              <button id="btnToneSweep" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;">🔄 Sweep (4k-10k)</button>
+              <button id="btnPinkNoise" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Audition full-spectrum pink noise to verify overall acoustic balance">📻 Pink Noise</button>
+            </div>
+            <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.74rem;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band</button>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem; flex-wrap: wrap;">
-          <div style="flex: 1; min-width: 220px; display: flex; align-items: center; gap: 0.5rem;">
+          <div id="freqControlRow" style="flex: 1; min-width: 220px; display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 35px;">Freq:</span>
             <input type="range" id="sliderToneFreq" min="20" max="20000" step="1" value="7000" style="flex: 1;">
             <span id="lblToneFreq" style="font-family: var(--font-mono); font-size: 0.78rem; min-width: 60px; text-align: right; color: var(--accent-cyan);">7000 Hz</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 0.75rem; color: var(--text-muted);">Volume:</span>
-            <input type="range" id="sliderToneVol" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning">
+            <input type="range" id="sliderToneVol" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning (keep low)">
             <span id="lblToneVol" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 45px; color: var(--text-muted);">-30 dB</span>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- Modal Guide for Sine Sweep & Pink Noise -->
+    <dialog id="toneGuideDialog" class="generator-guide-dialog">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(51, 65, 85, 0.6); padding-bottom: 0.5rem;">
+        <h3 style="font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; color: var(--accent-cyan);">
+          <span>🔊</span> How to Tune with Sine Sweep &amp; Pink Noise
+        </h3>
+        <button id="btnCloseToneGuide" class="quick-tag" style="padding: 0.15rem 0.5rem; font-size: 0.8rem; cursor: pointer;">✕ Close</button>
+      </div>
+
+      <div class="guide-step-card" style="border-left: 3px solid var(--accent-yellow);">
+        <h4 style="color: var(--accent-yellow);">⚠️ Golden Rule: Protect Your Hearing First</h4>
+        <p>Pure sine tones in the 4 kHz &ndash; 10 kHz region sound piercing through in-ear monitors. Always keep the Volume slider low (at or below <strong>-30 dB</strong>) before pressing Play.</p>
+      </div>
+
+      <div class="guide-step-card" style="border-left: 3px solid var(--accent-cyan);">
+        <h4 style="color: var(--accent-cyan);">1. Pinpoint Your Ear Canal Resonance (Sine Sweep)</h4>
+        <p>Every person's ear canal has a unique resonant spike (usually between <strong>5.5 kHz and 8.5 kHz</strong>) based on your ear canal length and tip insertion depth. Measurement rigs fix this artificially at 8 kHz, which may not match your ears.</p>
+        <ul>
+          <li><strong>Step A:</strong> Insert your IEMs with your normal daily eartips.</li>
+          <li><strong>Step B:</strong> Click <strong>🔄 Sweep (4k-10k)</strong> or play <strong>▶ Sine Tone</strong> while slowly sliding between 5 kHz and 9 kHz.</li>
+          <li><strong>Step C:</strong> Listen for the exact frequency where the tone suddenly jumps out as <em>unusually loud, sharp, or resonant</em>. That is your individual canal peak.</li>
+          <li><strong>Step D:</strong> Hit <strong>🎯 Snap Band</strong>. The app will align a PEQ filter directly to that frequency. Apply a small notch cut (e.g., <code>-2.0 dB</code> to <code>-3.5 dB</code> with <code>Q: 3.5 to 5.0</code>) to permanently eliminate treble fatigue!</li>
+        </ul>
+      </div>
+
+      <div class="guide-step-card" style="border-left: 3px solid #f472b6;">
+        <h4 style="color: #f472b6;">2. Verify Natural Tonal Balance (Pink Noise)</h4>
+        <p>Pink noise contains equal acoustic energy per octave (falling at 3 dB/octave), perfectly mimicking how human hearing judges spectral balance across bass, mids, and treble.</p>
+        <ul>
+          <li><strong>Step A:</strong> Click <strong>📻 Pink Noise</strong> after tweaking your PEQ curve.</li>
+          <li><strong>Step B:</strong> It should sound like a continuous, smooth, soothing waterfall.</li>
+          <li><strong>Step C:</strong> If you hear a harsh whistle or hissing peak, your treble has an uncorrected spike. If it sounds hollow or thin, check your 250 Hz &ndash; 500 Hz lower mids.</li>
+          <li><strong>Step D:</strong> Click <strong>🎧 Audition in RAM</strong> to toggle and verify before burning to hardware NVRAM.</li>
+        </ul>
+      </div>
+
+      <div style="margin-top: 1rem; text-align: right;">
+        <button id="btnGotItToneGuide" class="btn btn-primary" style="padding: 0.4rem 1.2rem; font-size: 0.82rem;">Got It, Let's Tune</button>
+      </div>
+    </dialog>
 
     <!-- Biquad Parameter Controls Matrix -->
     <section>
