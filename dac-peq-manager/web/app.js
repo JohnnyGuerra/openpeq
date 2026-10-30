@@ -457,6 +457,19 @@ function renderCurve() {
   curvePath.setAttribute("class", "curve-path");
   svg.appendChild(curvePath);
 
+  // 3b. Active Tone / Sweep Playhead Vertical Line
+  const activeToneFreq = parseFloat(document.getElementById("sliderToneFreq")?.value || "7000");
+  const playheadLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  const playheadX = xForFreq(activeToneFreq, width);
+  playheadLine.setAttribute("id", "svgTonePlayhead");
+  playheadLine.setAttribute("x1", playheadX);
+  playheadLine.setAttribute("x2", playheadX);
+  playheadLine.setAttribute("y1", 0);
+  playheadLine.setAttribute("y2", height);
+  playheadLine.setAttribute("class", "tone-playhead-line");
+  playheadLine.style.display = isToneActive ? "block" : "none";
+  svg.appendChild(playheadLine);
+
   // 4. Band Control Nodes
   const prevFocusedBand = document.activeElement?.closest?.("g[data-index]")?.getAttribute("data-index");
 
@@ -1547,13 +1560,29 @@ function updateWebAudioFilters() {
   }
 }
 
+function updateTonePlayhead(freq = null) {
+  const playhead = document.getElementById("svgTonePlayhead");
+  const svg = document.getElementById("eqSvg");
+  if (!playhead || !svg) return;
+  if (!isToneActive) {
+    playhead.style.display = "none";
+    return;
+  }
+  const f = freq !== null ? freq : parseFloat(document.getElementById("sliderToneFreq")?.value || "7000");
+  const width = svg.clientWidth || 800;
+  const x = xForFreq(f, width);
+  playhead.setAttribute("x1", x);
+  playhead.setAttribute("x2", x);
+  playhead.style.display = "block";
+}
+
 function stopAudioGenerators() {
   if (sweepInterval) {
     clearInterval(sweepInterval);
     sweepInterval = null;
     const btnSweep = document.getElementById("btnToneSweep");
     if (btnSweep) {
-      btnSweep.textContent = "🔄 Sweep (4k-10k)";
+      btnSweep.textContent = "🔄 Run Sweep";
       btnSweep.classList.remove("active");
     }
   }
@@ -1597,6 +1626,7 @@ function stopAudioGenerators() {
 
   isToneActive = false;
   isPlayingNoise = false;
+  updateTonePlayhead();
 
   const btnPlay = document.getElementById("btnTonePlay");
   if (btnPlay) {
@@ -1628,6 +1658,7 @@ function startTone(freq = 7000) {
   connectSourceThroughDspChain(toneOsc, 1.0);
   toneOsc.start();
   isToneActive = true;
+  updateTonePlayhead(freq);
 
   const btnPlay = document.getElementById("btnTonePlay");
   if (btnPlay) {
@@ -2408,14 +2439,75 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── Web Audio Tone Generator & Resonance Sweep Tool Handlers ────────────
+  const SWEEP_RANGES = {
+    full: { start: 20, end: 20000, steps: 220, label: "Full Spectrum (20 Hz – 20 kHz)" },
+    canal: { start: 4000, end: 10000, steps: 120, label: "Canal Peak Finder (4 kHz – 10 kHz)" },
+    bass: { start: 20, end: 300, steps: 120, label: "Sub-Bass & Mid-Bass (20 Hz – 300 Hz)" },
+  };
+
   const sliderToneFreq = document.getElementById("sliderToneFreq");
   const lblToneFreq = document.getElementById("lblToneFreq");
+  const selToneMode = document.getElementById("selToneMode");
+
+  function startSweepWithRange(modeKey) {
+    const btnSweep = document.getElementById("btnToneSweep");
+    const cfg = SWEEP_RANGES[modeKey] || SWEEP_RANGES.canal;
+
+    startTone(cfg.start);
+    if (sliderToneFreq) sliderToneFreq.value = Math.round(cfg.start);
+    if (lblToneFreq) lblToneFreq.textContent = `${Math.round(cfg.start)} Hz`;
+    if (btnSweep) {
+      btnSweep.textContent = "⏹ Stop Sweep";
+      btnSweep.classList.add("active");
+    }
+
+    let currentSweepFreq = cfg.start;
+    const stepRatio = Math.pow(cfg.end / cfg.start, 1 / cfg.steps);
+
+    sweepInterval = setInterval(() => {
+      currentSweepFreq *= stepRatio;
+      if (currentSweepFreq >= cfg.end) {
+        currentSweepFreq = cfg.start;
+      }
+      const rounded = Math.round(currentSweepFreq);
+      if (sliderToneFreq) sliderToneFreq.value = rounded;
+      if (lblToneFreq) lblToneFreq.textContent = `${rounded} Hz`;
+      if (toneOsc && audioCtx && isToneActive) {
+        toneOsc.frequency.setValueAtTime(currentSweepFreq, audioCtx.currentTime);
+      }
+      updateTonePlayhead(currentSweepFreq);
+    }, 50);
+  }
+
   if (sliderToneFreq) {
     sliderToneFreq.addEventListener("input", (e) => {
       const f = parseFloat(e.target.value);
       if (lblToneFreq) lblToneFreq.textContent = `${Math.round(f)} Hz`;
       if (toneOsc && audioCtx && isToneActive) {
         toneOsc.frequency.setValueAtTime(f, audioCtx.currentTime);
+      }
+      updateTonePlayhead(f);
+    });
+  }
+
+  if (selToneMode) {
+    selToneMode.addEventListener("change", (e) => {
+      const mode = e.target.value;
+      if (mode === "selected") {
+        if (sweepInterval) {
+          const f = sliderToneFreq ? parseFloat(sliderToneFreq.value) || 1000 : 1000;
+          startTone(f);
+          showToast(`Switched to manual Selected Frequency (${Math.round(f)} Hz)`);
+        }
+      } else if (SWEEP_RANGES[mode]) {
+        const cfg = SWEEP_RANGES[mode];
+        if (!isToneActive) {
+          if (sliderToneFreq) sliderToneFreq.value = cfg.start;
+          if (lblToneFreq) lblToneFreq.textContent = `${cfg.start} Hz`;
+        } else if (sweepInterval) {
+          startSweepWithRange(mode);
+          showToast(`Switched sweep to ${cfg.label}`);
+        }
       }
     });
   }
@@ -2434,7 +2526,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btnTonePlay")?.addEventListener("click", () => {
-    if (isToneActive) {
+    if (isToneActive && !sweepInterval) {
       stopAudioGenerators();
     } else {
       const f = sliderToneFreq ? parseFloat(sliderToneFreq.value) || 7000 : 7000;
@@ -2447,32 +2539,16 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("btnToneSweep")?.addEventListener("click", () => {
-    const btnSweep = document.getElementById("btnToneSweep");
     if (sweepInterval) {
       stopAudioGenerators();
       return;
     }
-    startTone(4000);
-    if (btnSweep) {
-      btnSweep.textContent = "⏹ Stop Sweep";
-      btnSweep.classList.add("active");
+    let mode = selToneMode ? selToneMode.value : "canal";
+    if (mode === "selected") {
+      mode = "full";
+      if (selToneMode) selToneMode.value = "full";
     }
-
-    let currentSweepFreq = 4000;
-    const endFreq = 10000;
-    const stepRatio = Math.pow(endFreq / 4000, 1 / 120);
-
-    sweepInterval = setInterval(() => {
-      currentSweepFreq *= stepRatio;
-      if (currentSweepFreq >= endFreq) {
-        currentSweepFreq = 4000;
-      }
-      if (sliderToneFreq) sliderToneFreq.value = Math.round(currentSweepFreq);
-      if (lblToneFreq) lblToneFreq.textContent = `${Math.round(currentSweepFreq)} Hz`;
-      if (toneOsc && audioCtx && isToneActive) {
-        toneOsc.frequency.setValueAtTime(currentSweepFreq, audioCtx.currentTime);
-      }
-    }, 50);
+    startSweepWithRange(mode);
   });
 
   // Generator Guide Dialog Handlers

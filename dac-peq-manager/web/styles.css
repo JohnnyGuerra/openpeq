@@ -431,6 +431,14 @@ header {
   pointer-events: none;
 }
 
+.tone-playhead-line {
+  stroke: var(--accent-yellow);
+  stroke-width: 1.5;
+  stroke-dasharray: 4, 3;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 .macro-tweak-panel {
   background: var(--bg-panel-subtle);
   border: 1px solid var(--border-color);
