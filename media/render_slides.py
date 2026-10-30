@@ -2,7 +2,7 @@ import os
 import sys
 from playwright.sync_api import sync_playwright
 
-SLIDES_DIR = "/home/ubuntu/iem/dac-peq-manager/media/slides"
+SLIDES_DIR = "/home/ubuntu/iem/media/slides"
 os.makedirs(SLIDES_DIR, exist_ok=True)
 
 SLIDES_HTML = [
@@ -115,6 +115,10 @@ SLIDES_HTML = [
               <text x="15" y="154" fill="#64748b" font-size="11">0 dB</text>
               <text x="10" y="94" fill="#64748b" font-size="11">+6 dB</text>
               <text x="10" y="214" fill="#64748b" font-size="11">-6 dB</text>
+              <!-- Preference Tolerance Envelope (±2.0 dB) -->
+              <polygon points="50,135 150,75 280,128 430,132 580,90 680,135 680,165 580,120 430,162 280,158 150,105 50,165" fill="rgba(168, 85, 247, 0.15)" stroke="rgba(168, 85, 247, 0.4)" stroke-dasharray="4,3"/>
+              <!-- Reference Target Line -->
+              <path d="M 50 150 C 110 95, 160 80, 220 115 C 270 140, 340 150, 420 145 C 490 135, 560 85, 620 130 L 680 150" fill="none" stroke="#a855f7" stroke-width="1.8" stroke-dasharray="5,4"/>
               <!-- Curve Fill & Line -->
               <path d="M 50 150 C 110 100, 160 85, 220 120 C 270 145, 340 155, 420 148 C 490 140, 560 90, 620 135 L 680 150 L 680 150 L 50 150 Z" fill="url(#curveGrad)"/>
               <path d="M 50 150 C 110 100, 160 85, 220 120 C 270 145, 340 155, 420 148 C 490 140, 560 90, 620 135 L 680 150" fill="none" stroke="#00f2fe" stroke-width="3"/>
@@ -130,23 +134,25 @@ SLIDES_HTML = [
             </svg>
           </div>
           <div class="mockup-actions">
-            <span class="btn btn-secondary">🎧 Live Audition in RAM</span>
-            <span class="btn btn-primary">🔥 Burn to Hardware NVRAM (&lt;50ms)</span>
+            <span class="btn" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fbbf24; font-size: 0.8rem; padding: 0.35rem 0.75rem; border-radius: 6px;">⚠️ Headroom Guard</span>
+            <span class="btn" style="background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; font-size: 0.8rem; padding: 0.35rem 0.75rem; border-radius: 6px;">🔊 Resonance Finder</span>
+            <span class="btn btn-secondary">🎧 RAM Audition</span>
+            <span class="btn btn-primary">🔥 Burn NVRAM</span>
           </div>
         </div>
 
         <div class="feature-bullets">
           <div class="f-item">
-            <h4>🎯 Draggable Log-Frequency SVG Handles</h4>
-            <p>Drag frequency and gain handles directly on the graph. Sliders update simultaneously with real-time biquad response.</p>
+            <h4>🎯 Preference Tolerance Envelopes</h4>
+            <p>Visual ±2.0 dB tolerance envelope shading for Harman 2019v2, JM-1, and IEF Neutral acoustic targets.</p>
           </div>
           <div class="f-item">
-            <h4>⚡ Live RAM Audition vs NVRAM Burn</h4>
-            <p>Test changes instantly in volatile RAM with zero flash wear. When satisfied, click Burn to write to non-volatile flash memory.</p>
+            <h4>🛡️ Auto-Headroom Normalizer</h4>
+            <p>Prevents digital DAC clipping on no-pregain dongles by automatically shifting positive filter peaks to 0 dBFS.</p>
           </div>
           <div class="f-item">
-            <h4>📦 5,000+ AutoEq Measurement Profiles</h4>
-            <p>Direct integration with AutoEq targets from Crinacle, Bad Guy Good Audio Reviews, Oratory1990, and Super*Review.</p>
+            <h4>🔊 In-Browser Resonance Finder</h4>
+            <p>Pure sine generator & 4k-10k sweep to detect your unique ear canal resonance and snap peak notch filters.</p>
           </div>
         </div>
       </div>

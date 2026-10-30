@@ -6,7 +6,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from playwright.sync_api import sync_playwright
 
 WEB_DIR = "/home/ubuntu/iem/dac-peq-manager/web"
-OUTPUT_DIR = "/home/ubuntu/iem/dac-peq-manager/media"
+OUTPUT_DIR = "/home/ubuntu/iem/media"
 RECORD_DIR = os.path.join(OUTPUT_DIR, "recordings")
 os.makedirs(RECORD_DIR, exist_ok=True)
 
@@ -47,7 +47,7 @@ def record_demo():
         )
         page = context.new_page()
 
-        print("Navigating to local Web Flasher...")
+        print("Navigating to current Web Flasher...")
         page.goto("http://127.0.0.1:8765/index.html")
         page.wait_for_load_state("networkidle")
         time.sleep(1.5)
@@ -55,51 +55,66 @@ def record_demo():
         # 1. Enable Demo Mode
         print("Enabling Virtual DAC Demo Mode...")
         page.click("#chkDemoMode")
-        time.sleep(2)
+        time.sleep(1.5)
 
-        # 2. Click through preset cards
+        # 2. Select Acoustic Target Overlay & Preference Envelope
+        print("Selecting JM-1 Modern Target with ±2.0 dB Preference Envelope...")
+        page.select_option("#selTargetCurve", "jm-1")
+        time.sleep(1.5)
+
+        # 3. Choose a rich preset with visible envelope delta
         print("Selecting Simgot EW300 Silver preset...")
         page.click('.preset-card[data-preset="ew300-silver"]')
-        time.sleep(2)
+        time.sleep(1.5)
 
-        print("Selecting Harman 2019v2 Target preset...")
-        page.click('.preset-card[data-preset="harman-2019v2"]')
-        time.sleep(2)
-
-        # 3. Interactively tweak band 1 (bass boost) and band 4 (treble)
-        print("Tweaking PEQ bands with real-time biquad response...")
+        # 4. Interactively tweak band 1 (bass boost) and band 4 (treble) to show dynamic curve & clipping guard
+        print("Boosting Band 1 to trigger Headroom Normalizer Guard...")
         page.evaluate("""() => {
             const b1Gain = document.querySelector('input[data-band="0"][data-param="gain"]');
             if (b1Gain) {
-                b1Gain.value = "5.5";
+                b1Gain.value = "6.5";
                 b1Gain.dispatchEvent(new Event('input', { bubbles: true }));
                 b1Gain.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }""")
-        time.sleep(1.5)
+        time.sleep(1.2)
 
         page.evaluate("""() => {
             const b4Gain = document.querySelector('input[data-band="3"][data-param="gain"]');
             if (b4Gain) {
-                b4Gain.value = "3.5";
+                b4Gain.value = "4.0";
                 b4Gain.dispatchEvent(new Event('input', { bubbles: true }));
                 b4Gain.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }""")
-        time.sleep(1.5)
+        time.sleep(1.2)
 
-        # 4. Click Audition in RAM
+        # 5. Click ⚠️ Normalize Headroom
+        print("Clicking Normalize Headroom Guard...")
+        norm_btn = page.query_selector("#btnNormalizeHeadroom")
+        if norm_btn and norm_btn.is_visible():
+            norm_btn.click()
+            time.sleep(1.5)
+
+        # 6. Audition Pure Tone / Ear Canal Resonance Finder
+        print("Auditioning Ear Canal Resonance Finder Tone...")
+        page.click("#btnTonePlay")
+        time.sleep(1.0)
+        page.click("#btnTonePlay") # toggle off
+        time.sleep(0.5)
+
+        # 7. Audition in volatile RAM
         print("Auditioning in volatile DSP RAM...")
         page.click("#btnApply")
-        time.sleep(2.5)
+        time.sleep(2.0)
 
-        # 5. Burn to Hardware NVRAM
-        print("Burning to hardware NVRAM flash...")
+        # 8. Burn to Hardware NVRAM
+        print("Burning to hardware NVRAM flash (<50ms)...")
         page.evaluate("""() => {
             window.confirm = () => true;
         }""")
         page.click("#btnFlash")
-        time.sleep(3.5)
+        time.sleep(3.0)
 
         context.close()
         browser.close()
@@ -139,7 +154,7 @@ def record_demo():
         gif_output
     ], check=True)
 
-    print("SUCCESS: Both MP4 and GIF generated!")
+    print("SUCCESS: Both MP4 and GIF updated to current UX!")
 
 if __name__ == "__main__":
     record_demo()
