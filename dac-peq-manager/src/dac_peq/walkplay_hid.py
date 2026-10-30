@@ -150,13 +150,18 @@ def encode_walkplay_filter_packet(
 
 def decode_walkplay_filter_packet(packet: Sequence[int]) -> Optional[Dict[str, Any]]:
     """Decode a WalkPlay input report into a filter dictionary."""
-    if len(packet) < 34:
+    if not packet or len(packet) < 32:
         return None
 
     raw = bytes(packet)
-    filter_idx = raw[4]
+    if raw[0] == 0x4B:
+        raw = raw[1:]
+    if len(raw) < 32:
+        return None
+
+    filter_idx = raw[4] if len(raw) > 4 else 0
     freq_raw, q_raw, gain_raw = struct.unpack("<HHh", raw[27:33])
-    type_id = raw[33]
+    type_id = raw[33] if len(raw) > 33 else 2
 
     if freq_raw == 0xFFFF and q_raw == 0xFFFF and gain_raw == -1:
         return {
@@ -179,10 +184,25 @@ def decode_walkplay_filter_packet(packet: Sequence[int]) -> Optional[Dict[str, A
     }
 
 
+decode_walkplay_filter_response = decode_walkplay_filter_packet
+
+
 def encode_walkplay_global_gain(gain_db: float) -> bytes:
     """Encode global gain command: [0x01, 0x03, 0x02, 0x00, gain_db_i8]."""
     val = int(round(max(-128.0, min(127.0, gain_db)))) & 0xFF
     return bytes([0x01, 0x03, 0x02, 0x00, val])
+
+
+# Known WalkPlay Vendor & Product IDs
+WALKPLAY_VID = 0x3302
+KNOWN_WALKPLAY_DEVICES = [
+    (0x3302, 0xC20F),  # CrinEar Protocol Micro
+    (0x3302, 0x43CC),  # CrinEar Protocol Max
+    (0x3302, 0x4362),  # Truthear KEYX
+    (0x3302, 0x4307),  # Tanchjim SPACE Pro (Rev 1)
+    (0x3302, 0x431D),  # Tanchjim SPACE Pro (Rev 2)
+    (0x3302, 0x4353),  # Tanchjim STARGATE II
+]
 
 
 class WalkPlayDSPDevice(BaseDSPDevice):
@@ -194,8 +214,14 @@ class WalkPlayDSPDevice(BaseDSPDevice):
     PROTOCOL_MICRO_PID = 0xC20F
     PROTOCOL_MAX_PID = 0x43CC
     TRUTHEAR_KEYX_PID = 0x4362
-    TANCHJIM_SPACE_PRO_PID = 0x431D
+    TANCHJIM_SPACE_PRO_PID = 0x4307
+    TANCHJIM_SPACE_PRO_REV2_PID = 0x431D
+    TANCHJIM_SPACE_PRO_PIDS = (0x4307, 0x431D)
     TANCHJIM_STARGATE2_PID = 0x4353
+    CMD_READ = 0x81
+    CMD_PEQ_RW = 0x09
+    CMD_GLOBAL_GAIN = 0x03
+    END_BYTE = 0x00
 
     def __init__(
         self,
@@ -206,7 +232,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
     ):
         super().__init__(vendor_id, product_id, path, use_mock)
         pid = product_id or self.PROTOCOL_MICRO_PID
-        if pid in (self.PROTOCOL_MAX_PID, self.TANCHJIM_SPACE_PRO_PID):
+        if pid in (self.PROTOCOL_MAX_PID, 0x4307, 0x431D):
             self._max_bands = 10
         else:
             self._max_bands = 8
@@ -257,7 +283,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
             from dac_peq.biquad import decimate_bands
             bands = decimate_bands(bands, target_bands=self.max_bands)
 
-        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, self.TANCHJIM_SPACE_PRO_PID, self.TANCHJIM_STARGATE2_PID) else 101
+        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID) else 101
         slot = preset.get("slot_id", default_slot)
         preamp = float(preset.get("preamp", 0.0))
 
@@ -296,4 +322,56 @@ class WalkPlayDSPDevice(BaseDSPDevice):
                 "preamp": float(self._dev.global_gain),
                 "slot_id": self._dev.current_slot,
             }
-        return {"bands": [], "preamp": 0.0, "slot_id": 101}
+
+        if not self._dev:
+            raise DeviceCommunicationError("Device not connected.")
+
+        def _safe_read(length: int = 64, timeout_ms: int = 200) -> List[int]:
+            try:
+                res = self._dev.read(length, timeout_ms=timeout_ms)
+            except TypeError:
+                try:
+                    res = self._dev.read(length, timeout_ms)
+                except TypeError:
+                    res = self._dev.read(length)
+            return list(res) if res else []
+
+        bands: List[Dict[str, Any]] = []
+        for idx in range(self.max_bands):
+            req = [self.REPORT_ID, self.CMD_READ, self.CMD_PEQ_RW, idx, self.END_BYTE]
+            req_padded = req + [0x00] * (64 - len(req))
+            self._dev.write(req_padded)
+            time.sleep(0.01)
+            resp = _safe_read(64, timeout_ms=200)
+            if resp and len(resp) >= 32:
+                filter_dict = decode_walkplay_filter_response(resp)
+                if filter_dict and not filter_dict.get("disabled", False):
+                    bands.append({
+                        "index": idx + 1,
+                        "type": filter_dict.get("type", "PK"),
+                        "freq": filter_dict.get("freq", 1000.0),
+                        "gain": filter_dict.get("gain", 0.0),
+                        "q": filter_dict.get("q", 1.0),
+                    })
+
+        # Read global preamp
+        preamp = 0.0
+        req_gain = [self.REPORT_ID, self.CMD_READ, self.CMD_GLOBAL_GAIN, 0x00, self.END_BYTE]
+        req_gain_padded = req_gain + [0x00] * (64 - len(req_gain))
+        self._dev.write(req_gain_padded)
+        time.sleep(0.01)
+        resp_gain = _safe_read(64, timeout_ms=200)
+        if resp_gain:
+            payload = resp_gain[1:] if resp_gain[0] == self.REPORT_ID else resp_gain
+            if len(payload) >= 5 and payload[1] == self.CMD_GLOBAL_GAIN:
+                gain_val = payload[4]
+                if gain_val > 127:
+                    gain_val -= 256
+                preamp = float(gain_val)
+
+        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID) else 101
+        return {
+            "bands": bands,
+            "preamp": preamp,
+            "slot_id": default_slot,
+        }

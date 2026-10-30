@@ -114,18 +114,46 @@ export function compute_composite_curve(bands_json, preamp_db, points, fs) {
 
 /**
  * @param {string} bands_json
- * @param {number} target_bands
- * @param {boolean} refit_gains
- * @param {number} fs
+ * @param {number} target_count
+ * @param {boolean | null} [refit_gains]
+ * @param {number | null} [fs]
  * @returns {string}
  */
-export function decimate_bands_json(bands_json, target_bands, refit_gains, fs) {
+export function decimate_bands_json(bands_json, target_count, refit_gains, fs) {
     let deferred3_0;
     let deferred3_1;
     try {
         const ptr0 = passStringToWasm0(bands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.decimate_bands_json(ptr0, len0, target_bands, refit_gains, fs);
+        const ret = wasm.decimate_bands_json(ptr0, len0, target_count, isLikeNone(refit_gains) ? 0xFFFFFF : refit_gains ? 1 : 0, !isLikeNone(fs), isLikeNone(fs) ? 0 : fs);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * @param {string} preset_json
+ * @param {number} target_count
+ * @param {boolean | null} [refit_gains]
+ * @param {number | null} [fs]
+ * @returns {string}
+ */
+export function decimate_preset_bands(preset_json, target_count, refit_gains, fs) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.decimate_preset_bands(ptr0, len0, target_count, isLikeNone(refit_gains) ? 0xFFFFFF : refit_gains ? 1 : 0, !isLikeNone(fs), isLikeNone(fs) ? 0 : fs);
         var ptr2 = ret[0];
         var len2 = ret[1];
         if (ret[3]) {
@@ -266,6 +294,59 @@ export function export_wavelet_txt(preset_json) {
         return getStringFromWasm0(ptr2, len2);
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * @param {string} preset_json
+ * @returns {string}
+ */
+export function generate_apo_config(preset_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.generate_apo_config(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * @param {string} preset_json
+ * @param {string | null} [sink_target]
+ * @returns {string}
+ */
+export function generate_pipewire_config(preset_json, sink_target) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(sink_target) ? 0 : passStringToWasm0(sink_target, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.generate_pipewire_config(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
 }
 

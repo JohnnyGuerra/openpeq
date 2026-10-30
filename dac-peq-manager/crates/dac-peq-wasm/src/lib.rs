@@ -61,14 +61,38 @@ pub fn calculate_recommended_preamp(
 #[wasm_bindgen]
 pub fn decimate_bands_json(
     bands_json: &str,
-    target_bands: usize,
-    refit_gains: bool,
-    fs: f64,
+    target_count: usize,
+    refit_gains: Option<bool>,
+    fs: Option<f64>,
 ) -> std::result::Result<String, JsValue> {
     let bands: Vec<BiquadBand> = serde_json::from_str(bands_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid bands JSON: {e}")))?;
-    let decimated = decimate_bands(&bands, target_bands, refit_gains, fs);
+    let decimated = decimate_bands(
+        &bands,
+        target_count,
+        refit_gains.unwrap_or(true),
+        fs.unwrap_or(48000.0),
+    );
     serde_json::to_string(&decimated)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {e}")))
+}
+
+#[wasm_bindgen]
+pub fn decimate_preset_bands(
+    preset_json: &str,
+    target_count: usize,
+    refit_gains: Option<bool>,
+    fs: Option<f64>,
+) -> std::result::Result<String, JsValue> {
+    let mut preset: PeqPreset = serde_json::from_str(preset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
+    preset.bands = decimate_bands(
+        &preset.bands,
+        target_count,
+        refit_gains.unwrap_or(true),
+        fs.unwrap_or(48000.0),
+    );
+    serde_json::to_string(&preset)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {e}")))
 }
 
@@ -173,10 +197,20 @@ pub fn export_pipewire_conf(preset_json: &str, sink_target: Option<String>) -> s
 }
 
 #[wasm_bindgen]
+pub fn generate_pipewire_config(preset_json: &str, sink_target: Option<String>) -> std::result::Result<String, JsValue> {
+    export_pipewire_conf(preset_json, sink_target)
+}
+
+#[wasm_bindgen]
 pub fn export_apo_txt(preset_json: &str) -> std::result::Result<String, JsValue> {
     let preset: PeqPreset = serde_json::from_str(preset_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
     Ok(format_equalizer_apo(&preset))
+}
+
+#[wasm_bindgen]
+pub fn generate_apo_config(preset_json: &str) -> std::result::Result<String, JsValue> {
+    export_apo_txt(preset_json)
 }
 
 #[wasm_bindgen]

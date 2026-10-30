@@ -340,5 +340,41 @@ def test_url_codec_and_macro_coupler_parity():
     assert py_smoothed == js_out["smoothed"]
 
 
+def test_rust_wasm_three_way_parity():
+    """Verify 3-way mathematical parity across Python, ES6 JavaScript, and compiled Rust WASM."""
+    vectors = json.loads(FIXTURES_FILE.read_text(encoding="utf-8"))
+    bands_10 = vectors["preset_10_band"]["bands"]
+    py_freqs = generate_log_frequencies(20.0, 20000.0, 64)
+    py_curve = compute_composite_response(bands_10, 0.0, py_freqs)
+    py_dec5 = decimate_bands(bands_10, target_bands=5)
+
+    js_script = f"""
+    import fs from 'node:fs';
+    import initWasm, {{ compute_composite_curve, decimate_bands_json }} from './wasm/dac_peq_wasm.js';
+
+    const wasmBytes = fs.readFileSync('./wasm/dac_peq_wasm_bg.wasm');
+    await initWasm(wasmBytes);
+
+    const bands10 = {json.dumps(bands_10)};
+    const freqs = {json.dumps(py_freqs)};
+
+    const wasmCurve = Array.from(compute_composite_curve(JSON.stringify(bands10), 0.0, freqs.length, 48000.0));
+    const wasmDec5 = JSON.parse(decimate_bands_json(JSON.stringify(bands10), 5));
+
+    console.log(JSON.stringify({{ wasmCurve, wasmDec5 }}));
+    """
+    wasm_out = run_node_eval(js_script)
+
+    for pc, wc in zip(py_curve, wasm_out["wasmCurve"]):
+        assert abs(pc - wc) < 1e-6
+
+    assert len(wasm_out["wasmDec5"]) == len(py_dec5) == 5
+    for pb, wb in zip(py_dec5, wasm_out["wasmDec5"]):
+        assert abs(pb["freq"] - wb["freq"]) < 1e-6
+        assert abs(pb["gain"] - wb["gain"]) < 1e-6
+        assert abs(pb["q"] - wb["q"]) < 1e-6
+
+
+
 
 

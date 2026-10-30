@@ -45,6 +45,8 @@ import {
   readKtMicroPeq,
   readMoondropReport,
   readWalkplayPeq,
+  sendKtMicroFilter,
+  sendKtMicroClearFlash,
   getStockBackup,
   saveStockBackup,
   hasStockBackup,
@@ -59,8 +61,20 @@ import {
 import {
   initWasmEngine,
   isWasmReady,
+  getWasmEngine,
+  computeCompositeResponseWasm,
   wasm,
 } from "./modules/wasm_engine.js";
+
+export function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // ── Built-in Presets ───────────────────────────────────────────────────────────
 const PRESETS = {
@@ -203,6 +217,7 @@ currentPreset.fullBands = PRESETS.bmasterx6.bands.map((b) => ({ ...b }));
 let referenceTargetCurve = null;
 let showTargetOverlay = true;
 let connectedHidDevice = null;
+let connectedDeviceProfile = null;
 let isDemoMode = false;
 let isConexantBlocked = false;
 let isRebootingPostCommit = false;
@@ -361,7 +376,8 @@ function renderCurve() {
 
   // 3. Composite EQ Curve Path & Reference Target Overlay
   const frequencies = generateLogFrequencies(220);
-  const responses = computeCompositeCurve(currentPreset.bands, currentPreset.preamp, frequencies);
+  const baseResponses = computeCompositeResponseWasm(currentPreset.bands, frequencies);
+  const responses = baseResponses.map((v) => v + Number(currentPreset.preamp || 0.0));
 
   let rmsDiff = 0.0;
   let maxDelta = 0.0;
@@ -370,11 +386,9 @@ function renderCurve() {
   const preferenceToleranceDb = selTolerance ? parseFloat(selTolerance.value) || 2.0 : 2.0;
 
   if (referenceTargetCurve && referenceTargetCurve.bands && referenceTargetCurve.bands.length > 0) {
-    const refResponses = computeCompositeCurve(
-      referenceTargetCurve.bands,
-      referenceTargetCurve.preamp !== undefined ? referenceTargetCurve.preamp : currentPreset.preamp,
-      frequencies
-    );
+    const refPreamp = referenceTargetCurve.preamp !== undefined ? referenceTargetCurve.preamp : currentPreset.preamp;
+    const baseRefResponses = computeCompositeResponseWasm(referenceTargetCurve.bands, frequencies);
+    const refResponses = baseRefResponses.map((v) => v + Number(refPreamp || 0.0));
 
     let sumSq = 0.0;
     let inBoundsCount = 0;
@@ -719,7 +733,20 @@ function setHardwareBandArchitecture(bandCount) {
   renderCurve();
 }
 
-async function initializeDevice(dev, isSilent = false) {
+export function setConnectedDevice(dev, profile = null) {
+  connectedHidDevice = dev;
+  connectedDeviceProfile = profile;
+}
+
+export function getConnectedDevice() {
+  return connectedHidDevice;
+}
+
+export function getConnectedDeviceProfile() {
+  return connectedDeviceProfile;
+}
+
+export async function initializeDevice(dev, isSilent = false) {
   try {
     if (!dev.opened) {
       await dev.open();
@@ -732,6 +759,9 @@ async function initializeDevice(dev, isSilent = false) {
 
     const dacMatch = findDacInDatabase(dev.vendorId, dev.productId, prodName);
     const dacDisplayName = dacMatch ? `${dacMatch.name} (${dacMatch.chipset})` : `${prodName} (${vidHex}:${pidHex})`;
+    connectedDeviceProfile = dacMatch
+      ? { ...dacMatch, arch: dacMatch.architecture || "ktmicro" }
+      : { arch: isWalkplayDsp(dev) ? "walkplay" : (isMoondropFreeDsp(dev) ? "moondrop" : "ktmicro") };
 
     updateFlashCounterBadge(dev);
 
@@ -797,6 +827,7 @@ function handleDeviceDisconnect(reason = "DAC disconnected.") {
     return;
   }
   connectedHidDevice = null;
+  connectedDeviceProfile = null;
   updateFlashCounterBadge(null);
   updateEqCapsBadge(null);
   const btnRestore = document.getElementById("btnRestoreStock");
@@ -833,11 +864,19 @@ async function connectDac() {
   }
 }
 
-function updateDeviceBadge(type, text) {
+export function updateDeviceBadge(type, text) {
   const badge = document.getElementById("deviceBadge");
   if (!badge) return;
-  badge.className = `badge ${type}`;
-  badge.innerHTML = `<span class="badge-dot"></span> <span>${text}</span>`;
+  // Support both (type, text) and (text, state)
+  const knownTypes = ["connected", "disconnected", "blocked", "warning", "ready", "error"];
+  let finalType = type;
+  let finalText = text;
+  if (knownTypes.includes(String(text).toLowerCase()) && !knownTypes.includes(String(type).toLowerCase())) {
+    finalType = text;
+    finalText = type;
+  }
+  badge.className = `badge ${escapeHtml(finalType || "disconnected")}`;
+  badge.innerHTML = `<span class="badge-dot"></span> <span>${escapeHtml(finalText || "")}</span>`;
 }
 
 async function sendHidReport(reportId, reg, cmd, d0 = 0, d1 = 0, d2 = 0, d3 = 0) {
@@ -1013,7 +1052,7 @@ async function applyToDevice(commitFlash = false) {
     const selDac = document.getElementById("selDacFilter");
     if (selDac && isFiio) {
       const filterVal = parseInt(selDac.value, 10) || 1;
-      await sendHidReport(REPORT_ID, 0x11, CMD_WRITE, filterVal, 0, 0, 0);
+      await sendKtMicroFilter(connectedHidDevice, filterVal);
     }
 
     // 4. NVRAM Flash Commit & Event-Driven Re-Enumeration Watcher
@@ -1244,20 +1283,39 @@ function restoreStockBackup() {
   showToast(`Stock factory tuning for Slot ${slotId} restored into editor! Click 'Burn to NVRAM Flash' to make permanent.`);
 }
 
-async function clearDeviceFlash() {
+export async function clearDeviceFlash() {
   if (!connectedHidDevice && !isDemoMode) {
     showToast("Please connect your DAC first.");
     return;
   }
+
+  // Check connected device architecture before sending sendKtMicroClearFlash
+  const isNonKtmicro = connectedDeviceProfile && connectedDeviceProfile.arch &&
+    connectedDeviceProfile.arch !== "ktmicro" && connectedDeviceProfile.arch !== "ktmicro_dsp";
+  const isMoondrop = connectedHidDevice && (
+    (connectedHidDevice.vendorId === 0x31B2 || connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722) &&
+    (connectedHidDevice.productId === 0x0112 || connectedHidDevice.productId === 274)
+  );
+  const isWalkplay = connectedHidDevice && isWalkplayDsp(connectedHidDevice);
+
+  if (isNonKtmicro || isMoondrop || isWalkplay) {
+    showToast("⚠️ 0x43 CLEAR hardware factory reset is only supported on KTMicro DSP hardware. For WalkPlay / Moondrop devices, flatten PEQ bands and flash instead.");
+    return;
+  }
+
   const ok = confirm(
     "⚠️ Hardware Factory Reset (0x43 CLEAR)?\n\nThis will send the hardware CLEAR command to erase all custom NVRAM flash configurations and restore the Kiwi Ears factory default state.\n\nProceed?"
   );
   if (!ok) return;
 
   try {
-    const REPORT_ID = 0x4b;
-    const CMD_CLEAR = 0x43;
-    await sendHidReport(REPORT_ID, 0x00, CMD_CLEAR, 0, 0, 0, 0);
+    if (connectedHidDevice) {
+      await sendKtMicroClearFlash(connectedHidDevice);
+    } else {
+      const REPORT_ID = 0x4b;
+      const CMD_CLEAR = 0x43;
+      await sendHidReport(REPORT_ID, 0x00, CMD_CLEAR, 0, 0, 0, 0);
+    }
     showToast("Factory CLEAR sent! Microcontroller resetting...");
     isRebootingPostCommit = true;
     const reenumerated = await waitForUsbReenumeration(navigator.hid, KTMICRO_FILTERS, 4000, 200);
@@ -1414,7 +1472,7 @@ function updateStats() {
   if (alertEl && alertText) {
     const warnings = lintAcousticBands(currentPreset.bands);
     if (warnings.length > 0) {
-      alertText.innerHTML = `<strong>Acoustic Advisory Notice:</strong><br>${warnings.join("<br>")}`;
+      alertText.innerHTML = `<strong>Acoustic Advisory Notice:</strong><br>${warnings.map(escapeHtml).join("<br>")}`;
       alertEl.classList.add("visible");
     } else {
       alertEl.classList.remove("visible");
@@ -1760,7 +1818,7 @@ async function toggleTestNoise() {
 }
 
 // ── Community Database Search & Pull ──────────────────────────────────────────
-async function performDatabaseSearch() {
+export async function performDatabaseSearch() {
   const input = document.getElementById("dbSearchInput");
   const query = (input ? input.value : "").trim();
   const sourceFilter = document.getElementById("dbSourceFilter") ? document.getElementById("dbSourceFilter").value : "";
@@ -1782,7 +1840,7 @@ async function performDatabaseSearch() {
   if (!container) return;
 
   if (matched.length === 0) {
-    container.innerHTML = `<div style="grid-column: 1/-1; padding: 0.8rem; text-align: center; color: var(--accent-yellow); font-size: 0.85rem;">No matching models found for "${query}". Try broader search terms.</div>`;
+    container.innerHTML = `<div style="grid-column: 1/-1; padding: 0.8rem; text-align: center; color: var(--accent-yellow); font-size: 0.85rem;">No matching models found for "${escapeHtml(query)}". Try broader search terms.</div>`;
     return;
   }
 
@@ -1792,12 +1850,20 @@ async function performDatabaseSearch() {
     card.className = "db-result-card";
     card.setAttribute("tabindex", "0");
     card.setAttribute("role", "button");
-    card.setAttribute("aria-label", `Load ${e.name} from ${e.source}`);
+    const safeName = escapeHtml(e.name || "");
+    const safeBrand = e.brand ? escapeHtml(e.brand) : "";
+    const safeType = e.type ? escapeHtml(e.type) : "";
+    const safeRig = e.rig ? escapeHtml(e.rig) : "";
+    const safeSource = escapeHtml(e.source || "");
+    card.setAttribute("aria-label", `Load ${safeName} from ${safeSource}`);
     card.innerHTML = `
-      <div class="db-result-name">${e.name}</div>
+      <div class="db-result-name">${safeName}</div>
       <div class="db-result-meta">
-        <span style="color: var(--accent-cyan);">${e.source}</span>
-        <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.7rem;">AutoEq ${activeHardwareBands}-Band</span>
+        <span style="color: var(--accent-cyan);">${safeSource}</span>
+        ${safeBrand ? `<span style="color: var(--text-secondary); font-size: 0.75rem;">${safeBrand}</span>` : ""}
+        ${safeType ? `<span style="color: var(--text-secondary); font-size: 0.75rem;">${safeType}</span>` : ""}
+        ${safeRig ? `<span style="color: var(--text-muted); font-size: 0.7rem;">(${safeRig})</span>` : ""}
+        <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.7rem;">AutoEq ${escapeHtml(activeHardwareBands)}-Band</span>
       </div>
     `;
     card.addEventListener("click", () => pullCommunityPreset(e));
@@ -2001,7 +2067,7 @@ function findDacInDatabase(vid, pid, prodName = "") {
   return null;
 }
 
-function renderDacDirectory(filter = null, query = null) {
+export function renderDacDirectory(filter = null, query = null) {
   if (filter !== null) currentDacFilter = filter;
   const container = document.getElementById("dacGrid");
   if (!container) return;
@@ -2044,23 +2110,39 @@ function renderDacDirectory(filter = null, query = null) {
       badgeHtml = `<span class="dac-badge-host">Host DSP Only</span>`;
     }
 
+    const safeName = escapeHtml(d.name || "");
+    const safeBrand = escapeHtml(d.brand || "");
+    const safeChipset = escapeHtml(d.chipset || "");
+    const safeRes = escapeHtml(d.resolution || "");
+    const safePower = escapeHtml(d.output_power || "");
+    const safeRec = escapeHtml(d.recommendation || "");
+    const safeVid = d.vid_hex ? escapeHtml(d.vid_hex) : "";
+    const safePid = d.pid_hex ? escapeHtml(d.pid_hex) : "";
+    const safePrice = d.price_usd !== undefined && d.price_usd !== null ? escapeHtml(d.price_usd) : "";
+    const safeBands = (d.max_bands ?? d.hardware_bands) !== undefined ? escapeHtml(d.max_bands ?? d.hardware_bands) : "";
+    const safeNotes = d.notes ? escapeHtml(d.notes) : "";
+
     card.innerHTML = `
       <div>
         <div class="dac-card-header">
           <div>
-            <div class="dac-card-brand">${d.brand}</div>
-            <div class="dac-card-title">${d.name}</div>
+            <div class="dac-card-brand">${safeBrand}</div>
+            <div class="dac-card-title">${safeName}</div>
           </div>
           ${badgeHtml}
         </div>
         <div class="dac-card-meta" style="margin-top: 0.5rem;">
-          <div><span class="dac-chipset-tag">${d.chipset}</span></div>
-          <div style="margin-top: 0.35rem; font-size: 0.75rem;"><strong>Resolution:</strong> ${d.resolution}</div>
-          <div style="font-size: 0.75rem;"><strong>Output Power:</strong> ${d.output_power}</div>
+          <div><span class="dac-chipset-tag">${safeChipset}</span></div>
+          ${safeRes ? `<div style="margin-top: 0.35rem; font-size: 0.75rem;"><strong>Resolution:</strong> ${safeRes}</div>` : ""}
+          ${safePower ? `<div style="font-size: 0.75rem;"><strong>Output Power:</strong> ${safePower}</div>` : ""}
+          ${safeVid ? `<div style="font-size: 0.75rem;"><strong>VID/PID:</strong> ${safeVid}:${safePid}</div>` : ""}
+          ${safePrice ? `<div style="font-size: 0.75rem;"><strong>Price:</strong> $${safePrice}</div>` : ""}
+          ${safeBands ? `<div style="font-size: 0.75rem;"><strong>Max Bands:</strong> ${safeBands}</div>` : ""}
+          ${safeNotes ? `<div style="font-size: 0.75rem;"><strong>Notes:</strong> ${safeNotes}</div>` : ""}
         </div>
       </div>
       <div class="dac-card-footer">
-        ${d.recommendation}
+        ${safeRec}
       </div>
     `;
     container.appendChild(card);

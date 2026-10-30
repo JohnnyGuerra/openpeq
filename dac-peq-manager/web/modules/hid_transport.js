@@ -283,6 +283,33 @@ export function waitForUsbReenumeration(hidApi, filters = KTMICRO_FILTERS, timeo
 
 // ── Two-Way WebHID Register Readback ──────────────────────────────────────────
 
+export async function sendKtMicroFilter(dev, filterVal = 1) {
+  if (dev && (dev.vendorId === 0x31B2 || dev.vendorId === 0x31b2 || dev.vendorId === 12722)) {
+    throw new Error("SAFETY BLOCK: Register 0x11 (DAC Filter) is unsupported on KT02H20 / Allegro Mini (0x31B2) and causes volume control lockout.");
+  }
+  if (!dev) throw new Error("No device provided.");
+  const REPORT_ID = 0x4b;
+  const CMD_WRITE = 0x57;
+  const payload = new Uint8Array([
+    0x11, 0x00, 0x00, 0x00,
+    CMD_WRITE, 0x00,
+    filterVal & 0xff, 0x00, 0x00, 0x00,
+  ]);
+  return dev.sendReport(REPORT_ID, payload);
+}
+
+export async function sendKtMicroClearFlash(dev) {
+  if (!dev) throw new Error("No device provided.");
+  const REPORT_ID = 0x4b;
+  const CMD_CLEAR = 0x43;
+  const payload = new Uint8Array([
+    0x00, 0x00, 0x00, 0x00,
+    CMD_CLEAR, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+  ]);
+  return dev.sendReport(REPORT_ID, payload);
+}
+
 export function decodeKtMicroBandRegisters(gfResp, qResp, compensate2X = false) {
   const typeRevMap = { 0: "PK", 3: "LSQ", 4: "HSQ" };
   const gainRaw = gfResp[6] | (gfResp[7] << 8);
@@ -359,7 +386,11 @@ export function readKtMicroRegister(dev, reg, timeoutMs = 500) {
   });
 }
 
-export async function readKtMicroPeq(dev, compensate2X = false) {
+export async function readKtMicroPeq(dev, options = {}) {
+  const compensate2X = typeof options === "boolean" ? options : Boolean(options && options.compensate2X);
+  const isNoPregain = Boolean(options && typeof options === "object" && options.noPregain) ||
+    Boolean(dev && (dev.vendorId === 0x31B2 || dev.vendorId === 0x31b2 || dev.vendorId === 12722));
+
   // 1. Slot (0x24)
   let slotId = 3;
   try {
@@ -371,23 +402,27 @@ export async function readKtMicroPeq(dev, compensate2X = false) {
 
   // 2. Preamp (0x66)
   let preampDb = 0.0;
-  try {
-    const preampResp = await readKtMicroRegister(dev, 0x66);
-    if (preampResp && preampResp.length > 6) {
-      const raw = preampResp[6];
-      const signed = raw > 127 ? raw - 256 : raw;
-      preampDb = Math.round((signed / 2.0) * 10) / 10;
+  if (!isNoPregain) {
+    try {
+      const preampResp = await readKtMicroRegister(dev, 0x66);
+      if (preampResp && preampResp.length > 6) {
+        const raw = preampResp[6];
+        const signed = raw > 127 ? raw - 256 : raw;
+        preampDb = Math.round((signed / 2.0) * 10) / 10;
+      }
+    } catch (err) {
+      console.warn("Could not read preamp register 0x66:", err);
     }
-  } catch (err) {
-    console.warn("Could not read preamp register 0x66:", err);
   }
 
   // 3. DAC filter (0x11)
   let dacFilter = 1;
-  try {
-    const filtResp = await readKtMicroRegister(dev, 0x11, 200);
-    if (filtResp && filtResp.length > 6) dacFilter = filtResp[6];
-  } catch (_) {}
+  if (!isNoPregain) {
+    try {
+      const filtResp = await readKtMicroRegister(dev, 0x11, 200);
+      if (filtResp && filtResp.length > 6) dacFilter = filtResp[6];
+    } catch (_) {}
+  }
 
   // 4. Five bands (0x26 - 0x2F)
   const bands = [];

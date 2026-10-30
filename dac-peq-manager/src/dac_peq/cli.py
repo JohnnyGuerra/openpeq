@@ -101,16 +101,22 @@ def load_preset_data(preset_name_or_path: str) -> Dict[str, Any]:
             raise typer.Exit(code=1)
 
     norm = preset_name_or_path.lower().replace("_", "-")
-    presets_dir = get_presets_dir()
+    cur = Path(__file__).resolve().parent
+    search_dirs: List[Path] = []
+    for d in [cur / "data" / "presets", cur.parent.parent / "presets", Path.cwd() / "presets"]:
+        if d.is_dir() and d not in search_dirs:
+            search_dirs.append(d)
 
-    candidates = [
-        presets_dir / f"{preset_name_or_path}.json",
-        presets_dir / f"{norm}.json",
-        presets_dir / f"{norm.replace('-', '_')}.json",
-        presets_dir / "targets" / f"{preset_name_or_path}.json",
-        presets_dir / "targets" / f"{norm}.json",
-        presets_dir / "targets" / f"{norm.replace('-', '_')}.json",
-    ]
+    candidates = []
+    for p_dir in search_dirs:
+        candidates.extend([
+            p_dir / f"{preset_name_or_path}.json",
+            p_dir / f"{norm}.json",
+            p_dir / f"{norm.replace('-', '_')}.json",
+            p_dir / "targets" / f"{preset_name_or_path}.json",
+            p_dir / "targets" / f"{norm}.json",
+            p_dir / "targets" / f"{norm.replace('-', '_')}.json",
+        ])
 
     for cand in candidates:
         if cand.is_file():
@@ -120,12 +126,17 @@ def load_preset_data(preset_name_or_path: str) -> Dict[str, Any]:
                 console.print(f"[bold red]Error reading preset {cand}:[/bold red] {e}")
                 raise typer.Exit(code=1)
 
-    available = [p.stem for p in presets_dir.glob("*.json")]
+    available = []
+    for d in search_dirs:
+        available.extend([p.stem for p in d.glob("*.json")])
     console.print(
         f"[bold red]Preset '{preset_name_or_path}' not found.[/bold red]\n"
-        f"Available presets in {presets_dir}: [cyan]{', '.join(sorted(set(available))) if available else 'none'}[/cyan]"
+        f"Available presets in {get_presets_dir()}: [cyan]{', '.join(sorted(set(available))) if available else 'none'}[/cyan]"
     )
     raise typer.Exit(code=1)
+
+
+load_preset = load_preset_data
 
 
 def parse_hex_id(val: Optional[str]) -> Optional[int]:
@@ -248,7 +259,7 @@ def cmd_apply(
             "[bold green][OK] PEQ curve successfully written to live DSP RAM![/bold green]\n"
             "[dim]Note: Live RAM adjustments take effect immediately. To persist across reboots, run 'flash'.[/dim]"
         )
-    except DeviceSecurityException as e:
+    except (DeviceSecurityException, ValueError) as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")
         raise typer.Exit(code=2)
     except Exception as e:
@@ -363,7 +374,7 @@ def cmd_flash(
             f"[bold green][OK] PEQ curve successfully burned to hardware NVRAM flash![/bold green] (Commit #{total_burns})\n"
             "[cyan]Settings are now non-volatile and will persist across unplugging, host swaps, and mobile devices.[/cyan]"
         )
-    except DeviceSecurityException as e:
+    except (DeviceSecurityException, ValueError) as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")
         raise typer.Exit(code=2)
     except Exception as e:
@@ -442,7 +453,7 @@ def cmd_read(
             out_p.write_text(json.dumps(state, indent=2), encoding="utf-8")
             console.print(f"[green]Saved hardware configuration to {out_p}[/green]")
 
-    except DeviceSecurityException as e:
+    except (DeviceSecurityException, ValueError) as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")
         raise typer.Exit(code=2)
     except Exception as e:
@@ -510,6 +521,9 @@ def cmd_filter(
     except DeviceSecurityException as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")
         raise typer.Exit(code=2)
+    except ValueError as e:
+        console.print(f"[bold red][SAFETY BLOCK][/bold red] {e}")
+        raise typer.Exit(code=1)
     except Exception as e:
         console.print(f"[bold red][ERROR][/bold red] Setting filter failed: {e}")
         raise typer.Exit(code=1)
@@ -536,16 +550,25 @@ def cmd_reset(
             raise typer.Exit(code=0)
 
     try:
-        dev = KTMicroDSPDevice(vendor_id=v_id, product_id=p_id, use_mock=mock)
+        dev = get_dsp_device(vendor_id=v_id, product_id=p_id, use_mock=mock)
+        if not isinstance(dev, KTMicroDSPDevice) or not hasattr(dev, "factory_reset"):
+            console.print(
+                f"[bold yellow][UNSUPPORTED][/bold yellow] Device ({getattr(dev, 'architecture_name', 'unknown')}) does not support KTMicro 0x43 CLEAR factory reset. "
+                "Factory reset command 0x43 is specific to KTMicro KT02H20 hardware."
+            )
+            raise typer.Exit(code=1)
+
         with dev:
             dev.factory_reset()
 
         console.print(
             "[bold green][OK] Factory reset successful! Hardware NVRAM cleared (0x43 CLEAR). Out-of-the-box defaults restored.[/bold green]"
         )
-    except DeviceSecurityException as e:
+    except (DeviceSecurityException, ValueError) as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")
         raise typer.Exit(code=2)
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"[bold red][ERROR][/bold red] Reset failed: {e}")
         raise typer.Exit(code=1)
@@ -725,34 +748,42 @@ def cmd_udev(
     print_rules: bool = typer.Option(False, "--print", "-p", help="Print rules to standard output"),
 ):
     """Manage Linux udev rules granting plugdev/uaccess to KTMicro DACs without sudo."""
-    rules_content = """# /etc/udev/rules.d/99-ktmicro-dac.rules
+    rules_content = """# /etc/udev/rules.d/99-dac-peq.rules
 # USB HID access permissions for KTMicro KT02H20 & WalkPlay DSP DACs
-# (Kiwi Ears Allegro Mini, BASN BmasterX 6 Type-C Plug, FiiO JA11, JM12, etc.)
+# (Kiwi Ears Allegro Mini, BASN BmasterX 6, FiiO JA11, JM12, Tanchjim SPACE Pro, Qudelix 5K, etc.)
 # Generated by dac-peq-manager
 
-# KTMicro / Kiwi Ears Allegro Mini / JCALLY (0x31B2)
-SUBSYSTEM=="usb", ATTR{idVendor}=="31b2", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess", GROUP="plugdev"
+# KTMicro / Kiwi Ears (Allegro Mini, Allegro Pro, S-Link) / Moondrop (FreeDSP, May) / BASN BmasterX (0x31B2)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="31b2", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess"
 
-# FiiO / JadeAudio JA11 (0x2972)
-SUBSYSTEM=="usb", ATTR{idVendor}=="2972", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess", GROUP="plugdev"
+# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro 0x4307, 0x431D, STARGATE II 0x4353) / TTGK (0x3302)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3302", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess"
 
-# KTMicro / Kiwi Ears OEM (0x3302)
-SUBSYSTEM=="usb", ATTR{idVendor}=="3302", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess", GROUP="plugdev"
+# FiiO / JadeAudio (JA11, LS-TC2, KA15) (0x2972)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2972", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess"
 
-# Realtek / WalkPlay OEM (0x0BDA:0x0023)
-SUBSYSTEM=="usb", ATTR{idVendor}=="0bda", ATTR{idProduct}=="0023", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess", GROUP="plugdev"
+# JCALLY (JM12, 0x1908)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1908", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1908", MODE="0666", TAG+="uaccess"
+
+# Qudelix (5K Reference DAC, 0x0a12)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0a12", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0a12", MODE="0666", TAG+="uaccess"
+
+# WalkPlay Realtek OEM (0x0bda:0x0023)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
+
+# Celest / Kinera (Wyvern Abyss DSP, 0x262a)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="262a", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess"
 
 # KTMicro OEM (0x0661)
-SUBSYSTEM=="usb", ATTR{idVendor}=="0661", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0661", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-
-# WalkPlay OEM (0x262A)
-SUBSYSTEM=="usb", ATTR{idVendor}=="262a", MODE="0666", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0661", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0661", MODE="0666", TAG+="uaccess"
 """
 
     if print_rules or not install:
@@ -835,6 +866,43 @@ def cmd_plot(
 
     plot_str = render_ascii_frequency_response(bands, preamp_val)
     console.print(plot_str)
+
+
+@app.command("show")
+def cmd_show(
+    preset_name: str = typer.Argument(..., help="Preset name or JSON file path to inspect"),
+    plot: bool = typer.Option(True, "--plot/--no-plot", help="Render ASCII frequency response curve"),
+):
+    """Show details, band parameters, and frequency curve of a PEQ preset."""
+    preset = load_preset_data(preset_name)
+    bands = preset.get("bands", [])
+    preamp_val = float(preset.get("preamp", 0.0))
+
+    table = Table(
+        title=f"Hardware PEQ Preset: {preset.get('name', preset_name)} (Preamp: {preamp_val:+.1f} dB)",
+        title_style="bold cyan",
+    )
+    table.add_column("Band", justify="center", style="cyan")
+    table.add_column("Type", justify="center", style="magenta")
+    table.add_column("Frequency (Hz)", justify="right", style="white")
+    table.add_column("Gain (dB)", justify="right", style="yellow")
+    table.add_column("Q Factor", justify="right", style="cyan")
+    table.add_column("Comment", style="dim")
+
+    for i, b in enumerate(bands):
+        table.add_row(
+            str(b.get("index", i + 1)),
+            b.get("type", "PK"),
+            f"{float(b.get('freq', 1000)):.1f}",
+            f"{float(b.get('gain', 0.0)):+.1f}",
+            f"{float(b.get('q', 1.0)):.2f}",
+            b.get("comment", ""),
+        )
+
+    console.print(table)
+    if plot:
+        plot_str = render_ascii_frequency_response(bands, preamp_val)
+        console.print(plot_str + "\n")
 
 
 # ── Database Command Group ────────────────────────────────────────────────────

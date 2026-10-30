@@ -43,17 +43,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - name: Install system dependencies (libudev)
+
+      - name: Install system dependencies (libudev, libusb)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libudev-dev
-      - name: Cargo test dac-peq-core
-        run: |
-          cargo test --manifest-path dac-peq-manager/Cargo.toml -p dac-peq-core
-      - name: Cargo build dac-peq-cli
-        run: |
-          cargo build --manifest-path dac-peq-manager/Cargo.toml --release -p dac-peq-cli
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev pkg-config
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Cargo workspace tests
+        working-directory: dac-peq-manager
+        run: cargo test --workspace
+
+      - name: Build CLI release binary
+        working-directory: dac-peq-manager
+        run: cargo build --release -p dac-peq-cli

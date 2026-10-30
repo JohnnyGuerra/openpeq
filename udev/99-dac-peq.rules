@@ -5,22 +5,34 @@
 #   sudo cp udev/99-dac-peq.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger
 
-# KTMicro / Kiwi Ears (Allegro Mini, Allegro Pro, S-Link) / Moondrop (FreeDSP, May) / BASN BmasterX
+# KTMicro / Kiwi Ears (Allegro Mini, Allegro Pro, S-Link) / Moondrop (FreeDSP, May) / BASN BmasterX (0x31B2)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="31b2", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess"
 
-# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro 0x4307, STARGATE II) / TTGK
+# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro 0x4307, 0x431D, STARGATE II 0x4353) / TTGK (0x3302)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="3302", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess"
 
-# FiiO / JadeAudio (JA11, LS-TC2, KA15)
+# FiiO / JadeAudio (JA11, LS-TC2, KA15) (0x2972)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="2972", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess"
 
-# WalkPlay Realtek OEM
+# JCALLY (JM12, 0x1908)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1908", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1908", MODE="0666", TAG+="uaccess"
+
+# Qudelix (5K Reference DAC, 0x0a12)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0a12", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0a12", MODE="0666", TAG+="uaccess"
+
+# WalkPlay Realtek OEM (0x0bda:0x0023)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
 
-# Celest / Kinera (Wyvern Abyss DSP)
+# Celest / Kinera (Wyvern Abyss DSP, 0x262a)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="262a", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess"
+
+# KTMicro OEM (0x0661)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0661", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0661", MODE="0666", TAG+="uaccess"

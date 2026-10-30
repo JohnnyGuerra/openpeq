@@ -68,7 +68,7 @@ pub fn refit_decimated_gains(
             let orig_gain = best_gain;
 
             for &d in &deltas {
-                let cand = (orig_gain + d * 100.0).round() / 100.0;
+                let cand = ((orig_gain + d) * 100.0).round() / 100.0;
                 if !(-18.0..=18.0).contains(&cand) {
                     continue;
                 }
@@ -99,85 +99,123 @@ pub fn decimate_bands(
 
     let target_count = target_bands.max(1);
 
-    if bands.len() <= target_count {
-        let mut out = bands.to_vec();
-        while out.len() < target_count {
-            out.push(BiquadBand::new(FilterType::Peaking, 1000.0, 0.0, 1.0));
+    let mut result: Vec<BiquadBand> = if bands.len() <= target_count {
+        bands.to_vec()
+    } else {
+        // Build logarithmic frequency bins across 20 Hz - 20000 Hz
+        let f_min = 20.0f64;
+        let f_max = 20000.0f64;
+        let l_min = f_min.log10();
+        let l_max = f_max.log10();
+
+        let mut bins = Vec::new();
+        for i in 0..target_count {
+            let b_lo = 10.0f64.powf(l_min + i as f64 * (l_max - l_min) / target_count as f64);
+            let b_hi = 10.0f64.powf(l_min + (i + 1) as f64 * (l_max - l_min) / target_count as f64);
+            bins.push((b_lo, b_hi));
         }
-        for (i, b) in out.iter_mut().enumerate() {
-            b.index = Some(i + 1);
+
+        let mut selected: Vec<BiquadBand> = Vec::new();
+        let mut used_indices = std::collections::HashSet::new();
+
+        for (b_lo, b_hi) in bins {
+            let candidates: Vec<(usize, &BiquadBand)> = bands
+                .iter()
+                .enumerate()
+                .filter(|(idx, b)| !used_indices.contains(idx) && (b_lo..b_hi).contains(&b.freq))
+                .collect();
+
+            if let Some((best_idx, best_b)) = candidates.into_iter().max_by(|a, b| {
+                score_band(a.1)
+                    .partial_cmp(&score_band(b.1))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }) {
+                selected.push(best_b.clone());
+                used_indices.insert(best_idx);
+            }
         }
-        return out;
-    }
 
-    // Build logarithmic frequency bins across 20 Hz - 20000 Hz
-    let f_min = 20.0f64;
-    let f_max = 20000.0f64;
-    let l_min = f_min.log10();
-    let l_max = f_max.log10();
+        // Fill remaining unfilled bins from highest-scoring global candidates
+        if selected.len() < target_count {
+            let mut remaining: Vec<(usize, &BiquadBand)> = bands
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| !used_indices.contains(idx))
+                .collect();
 
-    let mut bins = Vec::new();
-    for i in 0..target_count {
-        let b_lo = 10.0f64.powf(l_min + i as f64 * (l_max - l_min) / target_count as f64);
-        let b_hi = 10.0f64.powf(l_min + (i + 1) as f64 * (l_max - l_min) / target_count as f64);
-        bins.push((b_lo, b_hi));
-    }
+            remaining.sort_by(|a, b| {
+                score_band(b.1)
+                    .partial_cmp(&score_band(a.1))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
-    let mut selected: Vec<BiquadBand> = Vec::new();
-    let mut used_indices = std::collections::HashSet::new();
-
-    for (b_lo, b_hi) in bins {
-        let candidates: Vec<(usize, &BiquadBand)> = bands
-            .iter()
-            .enumerate()
-            .filter(|(idx, b)| !used_indices.contains(idx) && (b_lo..b_hi).contains(&b.freq))
-            .collect();
-
-        if let Some((best_idx, best_b)) = candidates.into_iter().max_by(|a, b| {
-            score_band(a.1)
-                .partial_cmp(&score_band(b.1))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }) {
-            selected.push(best_b.clone());
-            used_indices.insert(best_idx);
+            for (idx, b) in remaining.into_iter().take(target_count - selected.len()) {
+                selected.push(b.clone());
+                used_indices.insert(idx);
+            }
         }
-    }
 
-    // Fill remaining unfilled bins from highest-scoring global candidates
-    if selected.len() < target_count {
-        let mut remaining: Vec<(usize, &BiquadBand)> = bands
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| !used_indices.contains(idx))
-            .collect();
+        selected
+    };
 
-        remaining.sort_by(|a, b| {
-            score_band(b.1)
-                .partial_cmp(&score_band(a.1))
+    if result.len() < target_count {
+        let max_existing_f = result.iter().map(|b| b.freq).fold(0.0_f64, f64::max);
+        let has_high_shelf = result.iter().any(|b| b.filter_type == FilterType::HighShelf);
+        if !has_high_shelf && max_existing_f >= 6000.0 {
+            let test_freqs = [10000.0, 12000.0, 14000.0, 16000.0];
+            let orig_curve = compute_composite_response(bands, 0.0, &test_freqs, 48000.0);
+            let dec_curve = compute_composite_response(&result, 0.0, &test_freqs, 48000.0);
+            let orig_high_avg: f64 = orig_curve.iter().sum::<f64>() / test_freqs.len() as f64;
+            let dec_high_avg: f64 = dec_curve.iter().sum::<f64>() / test_freqs.len() as f64;
+            let diff = ((orig_high_avg - dec_high_avg) * 10.0).round() / 10.0;
+            let clamped_diff = diff.clamp(-12.0, 12.0);
+            result.push(BiquadBand::new(
+                FilterType::HighShelf,
+                12000.0,
+                clamped_diff,
+                0.707,
+            ));
+        }
+
+        let pad_freqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0];
+        while result.len() < target_count {
+            let mut chosen_f = 1000.0;
+            for &pf in &pad_freqs {
+                if !result.iter().any(|b| (b.freq - pf).abs() / pf < 0.25) {
+                    chosen_f = pf;
+                    break;
+                }
+            }
+            result.push(BiquadBand::new(
+                FilterType::Peaking,
+                chosen_f,
+                0.0,
+                1.414,
+            ));
+        }
+
+        result.sort_by(|a, b| {
+            a.freq
+                .partial_cmp(&b.freq)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-
-        for (idx, b) in remaining.into_iter().take(target_count - selected.len()) {
-            selected.push(b.clone());
-            used_indices.insert(idx);
-        }
     }
 
-    if refit_gains && bands.len() > selected.len() {
-        selected = refit_decimated_gains(bands, &selected, fs);
+    if refit_gains {
+        result = refit_decimated_gains(bands, &result, fs);
     }
 
-    selected.sort_by(|a, b| {
+    result.sort_by(|a, b| {
         a.freq
             .partial_cmp(&b.freq)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    for (i, b) in selected.iter_mut().enumerate() {
+    for (i, b) in result.iter_mut().enumerate() {
         b.index = Some(i + 1);
     }
 
-    selected
+    result
 }
 
 pub fn calculate_curve_difference(

@@ -94,7 +94,7 @@ pub fn calculate_rbj_biquad(
 
             let b0 = a_amp * (a_plus_1 + a_minus_1 * cos_w0 + two_sqrt_a_alpha);
             let b1 = -2.0 * a_amp * (a_minus_1 + a_plus_1 * cos_w0);
-            let b2 = a_amp * (a_plus_1 - a_minus_1 * cos_w0 - two_sqrt_a_alpha);
+            let b2 = a_amp * (a_plus_1 + a_minus_1 * cos_w0 - two_sqrt_a_alpha);
             let a0 = a_plus_1 - a_minus_1 * cos_w0 + two_sqrt_a_alpha;
             let a1 = 2.0 * (a_minus_1 - a_plus_1 * cos_w0);
             let a2 = a_plus_1 - a_minus_1 * cos_w0 - two_sqrt_a_alpha;

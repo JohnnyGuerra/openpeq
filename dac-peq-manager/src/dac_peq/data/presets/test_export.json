@@ -1,0 +1,47 @@
+{
+  "name": "test_export",
+  "description": "Hardware DSP Test Export Preset",
+  "preamp": -1.0,
+  "bands": [
+    {
+      "index": 1,
+      "type": "LSQ",
+      "freq": 60.0,
+      "gain": 2.0,
+      "q": 0.71,
+      "comment": "Sub-bass"
+    },
+    {
+      "index": 2,
+      "type": "PK",
+      "freq": 250.0,
+      "gain": -1.5,
+      "q": 1.0,
+      "comment": "Mid-bass"
+    },
+    {
+      "index": 3,
+      "type": "PK",
+      "freq": 1000.0,
+      "gain": 1.0,
+      "q": 1.2,
+      "comment": "Midrange"
+    },
+    {
+      "index": 4,
+      "type": "PK",
+      "freq": 3500.0,
+      "gain": -2.0,
+      "q": 2.0,
+      "comment": "Upper-mid"
+    },
+    {
+      "index": 5,
+      "type": "HSQ",
+      "freq": 8000.0,
+      "gain": 1.5,
+      "q": 0.71,
+      "comment": "Treble"
+    }
+  ]
+}

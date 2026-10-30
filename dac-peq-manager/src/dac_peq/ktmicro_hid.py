@@ -65,8 +65,12 @@ KNOWN_CONEXANT_DEVICES = [
     (0x3302, 0x3365),  # TTGK Technology CX31993 384kHz HiFi Audio
 ]
 
+WALKPLAY_PIDS = {0xC20F, 0x43CC, 0x4362, 0x431D, 0x4307, 0x4353}
+NON_FLASHABLE_FIIO_PIDS = {0x0047, 0x0066, 0x0104, 0x0105, 0x0107}
+MOONDROP_FREEDSP_PID = 0x0112
 
-class DeviceSecurityException(Exception):
+
+class DeviceSecurityException(RuntimeError):
     """Raised when an unsafe operation is attempted against protected or fixed-ROM hardware."""
     pass
 
@@ -160,15 +164,46 @@ def is_conexant_cx31993(dev_info: Dict[str, Any]) -> bool:
 
 
 def is_ktmicro_candidate(dev_info: Dict[str, Any]) -> bool:
-    """Check if device descriptor matches known KTMicro / WalkPlay hardware."""
+    """Check if device descriptor matches supported KTMicro KT02H20 hardware.
+
+    Explicitly excludes Conexant CX31993, Moondrop FreeDSP, WalkPlay devices,
+    and non-flashable FiiO devices per GEMINI.md safety rules.
+    """
+    if is_conexant_cx31993(dev_info):
+        return False
+
     vid = dev_info.get("vendor_id", 0)
+    pid = dev_info.get("product_id", 0)
     prod = str(dev_info.get("product_string", "")).lower()
     mfg = str(dev_info.get("manufacturer_string", "")).lower()
 
-    if vid in KTMICRO_KNOWN_VIDS:
+    # 1. Safety Guard: Exclude Conexant CX31993
+    if vid == CONEXANT_VID or (vid == 0x3302 and pid == 0x3365) or "cx31993" in prod or "cx31993" in mfg:
+        return False
+
+    # 2. Exclude Moondrop FreeDSP (0x31B2:0x0112)
+    if vid == 0x31B2 and pid == MOONDROP_FREEDSP_PID:
+        return False
+
+    # 3. Exclude known WalkPlay PIDs under 0x3302
+    if vid == 0x3302 and pid in WALKPLAY_PIDS:
+        return False
+
+    # 4. Exclude non-flashable FiiO PIDs
+    if vid == 0x2972 and pid in NON_FLASHABLE_FIIO_PIDS:
+        return False
+
+    # KTMicro supported VIDs
+    if vid == 0x31B2:
+        return True
+    if vid == 0x2972:
+        return True
+    if vid == 0x1908:
+        return True
+    if vid in (0x0661, 0x3302, 0x0BDA, 0x262A):
         return True
 
-    kt_keywords = ["allegro", "bmaster", "kt02h20", "ktmicro", "walkplay", "ja11", "jm12", "s-link", "slink", "kt0211", "kt1132", "kt3016"]
+    kt_keywords = ["allegro", "bmaster", "kt02h20", "ktmicro", "ja11", "jm12", "s-link", "slink", "kt0211", "kt1132", "kt3016"]
     if any(k in prod or k in mfg for k in kt_keywords):
         return True
 
@@ -204,7 +239,11 @@ def scan_devices() -> List[DiscoveredDevice]:
         if is_cx:
             status = "Host DSP Only (Conexant CX31993 - Flash BLOCKED for hardware safety)"
         elif is_kt:
-            status = f"Hardware Flashable (KTMicro KT02H20 / WalkPlay HID - FW v{quirks['firmware_version']})"
+            status = f"Hardware Flashable (KTMicro KT02H20 HID - FW v{quirks['firmware_version']})"
+        elif vid == 0x31B2 and pid == MOONDROP_FREEDSP_PID:
+            status = "Hardware Flashable (Moondrop FreeDSP Custom HID)"
+        elif vid == 0x3302 and pid in WALKPLAY_PIDS:
+            status = "Hardware Flashable (WalkPlay Scheme 11/15/16 HID)"
         else:
             status = "Standard USB HID Device"
 
@@ -364,28 +403,60 @@ class KTMicroDSPDevice(BaseDSPDevice):
         product_id: Optional[int] = None,
         path: Optional[bytes] = None,
         use_mock: bool = False,
+        no_pregain: bool = False,
     ):
-        self.vendor_id = vendor_id
-        self.product_id = product_id
+        self._vid = vendor_id
+        self._pid = product_id
         self.path = path
         self.use_mock = use_mock
+        self.no_pregain = no_pregain
         self._dev = None
         self.release_number: int = 0x0200
         self.firmware_quirks: Optional[Dict[str, Any]] = None
 
+    @property
+    def vendor_id(self) -> Optional[int]:
+        return self._vid
+
+    @vendor_id.setter
+    def vendor_id(self, val: Optional[int]) -> None:
+        self._vid = val
+
+    @property
+    def product_id(self) -> Optional[int]:
+        return self._pid
+
+    @product_id.setter
+    def product_id(self, val: Optional[int]) -> None:
+        self._pid = val
+
+    def is_allegro_mini_or_no_pregain(self) -> bool:
+        """Return True if device is Kiwi Ears Allegro Mini (0x31B2) or configured with no_pregain."""
+        vid = self._vid if self._vid is not None else self.vendor_id
+        if vid == 0x31B2:
+            return True
+        if self.no_pregain:
+            return True
+        if self.firmware_quirks and self.firmware_quirks.get("no_pregain"):
+            return True
+        return False
+
     def connect(self):
         """Connect to target HID device with safety verification."""
-        # Safety Guard Check: Conexant CX31993
-        if self.vendor_id == CONEXANT_VID or (self.vendor_id, self.product_id) in KNOWN_CONEXANT_DEVICES:
+        vid = self._vid if self._vid is not None else self.vendor_id
+        pid = self._pid if self._pid is not None else self.product_id
+
+        # Safety Guard Check: Conexant CX31993 per GEMINI.md Rule 2
+        if vid == CONEXANT_VID or (vid == 0x3302 and pid == 0x3365) or (vid, pid) in KNOWN_CONEXANT_DEVICES:
             raise DeviceSecurityException(
-                f"SAFETY GUARD: Device 0x{self.vendor_id:04X}:0x{self.product_id:04X} is a Conexant CX31993 DAC. "
+                f"SAFETY GUARD: Device 0x{vid:04X}:0x{pid or 0:04X} is a Conexant CX31993 DAC. "
                 "The CX31993 has fixed mask ROM and does not support hardware flashing. "
                 "Attempting HID register writes will corrupt OTP descriptors. "
                 "Use 'export-pipewire' or 'export-apo' for host-side DSP."
             )
 
         if self.use_mock:
-            self._dev = MockKTDevice(self.vendor_id or 0x31B2, self.product_id or 0x0111)
+            self._dev = MockKTDevice(vid or 0x31B2, pid or 0x0111)
             self.firmware_quirks = detect_firmware_quirks(self._dev.vendor_id, self._dev.product_id, self._dev.release_number)
             return
 
@@ -396,12 +467,12 @@ class KTMicroDSPDevice(BaseDSPDevice):
         if self.path:
             self._dev = hid.device()
             self._dev.open_path(self.path)
-            self.firmware_quirks = detect_firmware_quirks(self.vendor_id or 0x31B2, self.product_id or 0x0111, self.release_number)
+            self.firmware_quirks = detect_firmware_quirks(vid or 0x31B2, pid or 0x0111, self.release_number)
             return
 
         # If VID/PID specified, find and verify
-        if self.vendor_id is not None and self.product_id is not None:
-            for item in hid.enumerate(self.vendor_id, self.product_id):
+        if vid is not None and pid is not None:
+            for item in hid.enumerate(vid, pid):
                 if is_conexant_cx31993(item):
                     raise DeviceSecurityException(
                         f"SAFETY GUARD: Device at {item.get('path')} matches Conexant CX31993. Flashing blocked."
@@ -410,9 +481,9 @@ class KTMicroDSPDevice(BaseDSPDevice):
                 self._dev.open_path(item["path"])
                 self.release_number = item.get("release_number", 0x0100)
                 prod_str = item.get("product_string", "")
-                self.firmware_quirks = detect_firmware_quirks(self.vendor_id, self.product_id, self.release_number, prod_str)
+                self.firmware_quirks = detect_firmware_quirks(vid, pid, self.release_number, prod_str)
                 return
-            raise DeviceCommunicationError(f"Device 0x{self.vendor_id:04X}:0x{self.product_id:04X} not found.")
+            raise DeviceCommunicationError(f"Device 0x{vid:04X}:0x{pid:04X} not found.")
 
         # Otherwise dynamic scan for KTMicro candidate
         candidates = scan_devices()
@@ -425,8 +496,8 @@ class KTMicroDSPDevice(BaseDSPDevice):
 
         # Open the first matching KTMicro candidate
         chosen = kt_candidates[0]
-        self.vendor_id = chosen.vendor_id
-        self.product_id = chosen.product_id
+        self._vid = chosen.vendor_id
+        self._pid = chosen.product_id
         self.release_number = chosen.release_number
         self.firmware_quirks = chosen.firmware_quirks
         self._dev = hid.device()
@@ -482,6 +553,14 @@ class KTMicroDSPDevice(BaseDSPDevice):
 
     def set_dac_filter(self, filter_name: str, commit_flash: bool = False) -> None:
         """Set hardware DAC reconstruction filter (FAST-LL, FAST-PC, SLOW-LL, SLOW-PC, NON-OS)."""
+        vid = self._vid if self._vid is not None else self.vendor_id
+        if vid == 0x31B2 or self.is_allegro_mini_or_no_pregain():
+            raise ValueError(
+                "Register 0x11 (DAC reconstruction filter) is strictly a FiiO JA11 feature. "
+                "On KTMicro KT02H20 / Kiwi Ears Allegro Mini (0x31B2), writing to register 0x11 "
+                "directly overwrites the MCU's internal volume attenuation control, locking out "
+                "physical volume buttons on iOS/Android per GEMINI.md Rule 1."
+            )
         idx = self.DAC_FILTERS.get(filter_name.upper())
         if not idx:
             valid = ", ".join(self.DAC_FILTERS.keys())
@@ -562,10 +641,12 @@ class KTMicroDSPDevice(BaseDSPDevice):
 
         # 3. Write Preamp (Register 0x66)
         # KTMicro stores signed digital gain with 0.5 dB steps: value = round(gain_db * 2)
-        preamp_db = float(preset.get("preamp", 0.0))
-        preamp_encoded = int(round(preamp_db * 2.0)) & 0xFF
-        self._send_packet(self.REG_PREAMP, self.CMD_WRITE, preamp_encoded, 0x00, 0x00, 0x00)
-        time.sleep(0.01)
+        # Per GEMINI.md Rule 1: skip register 0x66 on Allegro Mini / no_pregain to prevent volume lockout
+        if not self.is_allegro_mini_or_no_pregain():
+            preamp_db = float(preset.get("preamp", 0.0))
+            preamp_encoded = int(round(preamp_db * 2.0)) & 0xFF
+            self._send_packet(self.REG_PREAMP, self.CMD_WRITE, preamp_encoded, 0x00, 0x00, 0x00)
+            time.sleep(0.01)
 
         # 4. Optional NVRAM Flash Commit
         if commit_flash:
@@ -641,19 +722,25 @@ class KTMicroDSPDevice(BaseDSPDevice):
         slot_resp = self._read_register(self.REG_SLOT)
         slot_id = slot_resp[6] if len(slot_resp) > 6 else 0x03
 
-        # 2. Read preamp (0.5 dB step decoding: signed_byte / 2.0)
-        preamp_resp = self._read_register(self.REG_PREAMP)
-        raw_preamp = preamp_resp[6] if len(preamp_resp) > 6 else 0
-        signed_preamp = raw_preamp - 256 if raw_preamp > 127 else raw_preamp
-        preamp_db = round(signed_preamp / 2.0, 1)
+        vid = self._vid if self._vid is not None else self.vendor_id
+        if vid == 0x31B2 or self.is_allegro_mini_or_no_pregain():
+            # Skip reading registers 0x66 and 0x11 per GEMINI.md Rule 1
+            preamp_db = 0.0
+            filter_name = None
+        else:
+            # 2. Read preamp (0.5 dB step decoding: signed_byte / 2.0)
+            preamp_resp = self._read_register(self.REG_PREAMP)
+            raw_preamp = preamp_resp[6] if len(preamp_resp) > 6 else 0
+            signed_preamp = raw_preamp - 256 if raw_preamp > 127 else raw_preamp
+            preamp_db = round(signed_preamp / 2.0, 1)
 
-        # 3. Read DAC reconstruction filter
-        try:
-            filter_resp = self._read_register(self.REG_DAC_FILTER, timeout_ms=200)
-            filter_idx = filter_resp[6] if len(filter_resp) > 6 else 1
-            filter_name = self.DAC_FILTERS_REV.get(filter_idx, f"FILTER_{filter_idx}")
-        except Exception:
-            filter_name = "FAST-LL"
+            # 3. Read DAC reconstruction filter
+            try:
+                filter_resp = self._read_register(self.REG_DAC_FILTER, timeout_ms=200)
+                filter_idx = filter_resp[6] if len(filter_resp) > 6 else 1
+                filter_name = self.DAC_FILTERS_REV.get(filter_idx, f"FILTER_{filter_idx}")
+            except Exception:
+                filter_name = "FAST-LL"
 
         # 4. Read 5 bands
         bands = []

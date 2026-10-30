@@ -161,3 +161,14 @@ pub fn encode_preset_payload(
 
     Ok(reports)
 }
+
+/// Encode PEQ preset payload into live DSP volatile RAM (without 0x53 COMMIT).
+pub fn encode_ram_preset_payload(
+    preset: &PeqPreset,
+    vid: u16,
+    pid: u16,
+    slot_id: u8,
+    compensate_2x: bool,
+) -> Result<Vec<KtReport>> {
+    encode_preset_payload(preset, vid, pid, slot_id, compensate_2x, false)
+}

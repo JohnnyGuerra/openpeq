@@ -145,3 +145,128 @@ fn test_exporters_pipewire_and_apo() {
     let wav = format_wavelet_graphiceq(&preset);
     assert!(wav.starts_with("GraphicEQ: 20.0 "));
 }
+
+#[test]
+fn test_refit_decimated_gains_reduces_mse() {
+    let mut orig_bands = Vec::new();
+    let freqs = [60.0, 120.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 6000.0, 8000.0, 12000.0];
+    let gains = [3.5, 2.0, -1.5, 0.5, -2.0, 3.0, 4.5, -1.0, 2.5, -3.0];
+    for (f, g) in freqs.iter().zip(gains.iter()) {
+        orig_bands.push(BiquadBand::new(FilterType::Peaking, *f, *g, 1.414));
+    }
+
+    // Decimate to 5 bands WITHOUT refit
+    let decimated_initial = decimate_bands(&orig_bands, 5, false, 48000.0);
+    assert_eq!(decimated_initial.len(), 5);
+
+    let test_points = generate_log_frequencies(20.0, 20000.0, 128);
+    let target_curve = compute_composite_response(&orig_bands, 0.0, &test_points, 48000.0);
+    let initial_curve = compute_composite_response(&decimated_initial, 0.0, &test_points, 48000.0);
+    let initial_mse: f64 = initial_curve
+        .iter()
+        .zip(target_curve.iter())
+        .map(|(c, t)| (c - t).powi(2))
+        .sum::<f64>()
+        / test_points.len() as f64;
+
+    // Refit gains
+    let refitted = refit_decimated_gains(&orig_bands, &decimated_initial, 48000.0);
+    assert_eq!(refitted.len(), 5);
+
+    let refitted_curve = compute_composite_response(&refitted, 0.0, &test_points, 48000.0);
+    let refitted_mse: f64 = refitted_curve
+        .iter()
+        .zip(target_curve.iter())
+        .map(|(c, t)| (c - t).powi(2))
+        .sum::<f64>()
+        / test_points.len() as f64;
+
+    // Refit must strictly reduce or maintain MSE
+    assert!(
+        refitted_mse <= initial_mse + 1e-9,
+        "Refitted MSE ({}) should be <= initial MSE ({})",
+        refitted_mse,
+        initial_mse
+    );
+
+    // Verify all gains are within [-18.0, 18.0] and rounded to 0.01 dB
+    for b in &refitted {
+        assert!(
+            (-18.0..=18.0).contains(&b.gain),
+            "Gain {} out of [-18, 18] bounds",
+            b.gain
+        );
+        let rounded = (b.gain * 100.0).round() / 100.0;
+        assert!(
+            (b.gain - rounded).abs() < 1e-6,
+            "Gain {} not rounded to 0.01 dB",
+            b.gain
+        );
+    }
+}
+
+#[test]
+fn test_decimate_bands_high_shelf_synthesis_and_padding() {
+    // 2-band input with a high frequency band >= 6000 Hz
+    let bands = vec![
+        BiquadBand::new(FilterType::LowShelf, 100.0, 4.0, 0.71),
+        BiquadBand::new(FilterType::Peaking, 8000.0, 3.5, 1.414),
+    ];
+
+    let target = 5;
+    let decimated = decimate_bands(&bands, target, true, 48000.0);
+    assert_eq!(decimated.len(), 5);
+
+    // Verify high shelf synthesis at 12000.0 Hz
+    let hs_bands: Vec<&BiquadBand> = decimated
+        .iter()
+        .filter(|b| b.filter_type == FilterType::HighShelf && (b.freq - 12000.0).abs() < 1e-3)
+        .collect();
+    assert_eq!(hs_bands.len(), 1, "Should synthesize exactly one HighShelf at 12000.0 Hz");
+    let hs = hs_bands[0];
+    assert!(
+        (-12.0..=12.0).contains(&hs.gain),
+        "HighShelf gain {} should be clamped to [-12, 12]",
+        hs.gain
+    );
+    assert!((hs.q - 0.707).abs() < 1e-3, "HighShelf Q should be 0.707");
+
+    // Verify padded bands
+    let padded_bands: Vec<&BiquadBand> = decimated
+        .iter()
+        .filter(|b| b.gain == 0.0 && b.filter_type == FilterType::Peaking)
+        .collect();
+    assert_eq!(padded_bands.len(), 2, "Should have 2 padded bands with gain 0.0");
+    for pb in &padded_bands {
+        assert!((pb.q - 1.414).abs() < 1e-3, "Padded band Q should be 1.414");
+    }
+
+    // Verify no two bands collide within 20% frequency difference
+    for i in 0..decimated.len() {
+        for j in (i + 1)..decimated.len() {
+            let f1 = decimated[i].freq;
+            let f2 = decimated[j].freq;
+            let rel_diff = (f1 - f2).abs() / f2.min(f1);
+            assert!(
+                rel_diff >= 0.20,
+                "Frequencies {} and {} collide too closely (rel diff: {})",
+                f1,
+                f2,
+                rel_diff
+            );
+        }
+    }
+
+    // Verify sorted by frequency
+    for i in 0..(decimated.len() - 1) {
+        assert!(
+            decimated[i].freq <= decimated[i + 1].freq,
+            "Bands are not sorted by frequency"
+        );
+    }
+
+    // Verify indices
+    for (i, b) in decimated.iter().enumerate() {
+        assert_eq!(b.index, Some(i + 1));
+    }
+}
