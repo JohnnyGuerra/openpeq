@@ -35,6 +35,9 @@ Run the full hardware flasher directly in your browser via WebHID (Chrome, Brave
 * 2-Way Hardware Readback & Live Audition in RAM before burning to flash.
 * Built-in Safety Guardrails: NVRAM Flash Wear-Out Tracker & Conexant fixed mask ROM protection.
 
+> [!TIP]
+> **Linux Users:** Linux restricts `/dev/hidraw*` devices to `root` by default. See [Linux WebHID & udev Setup](#-linux-webhid--udev-setup) below to enable browser access in 10 seconds.
+
 ---
 
 ## 📸 Architecture & Feature Slides
@@ -128,7 +131,32 @@ dac-peq-manager export-apo bmasterx6 --full-target
 
 ---
 
-## 🤝 Community & Contributing
+## 🐧 Linux WebHID & udev Setup
+
+On Linux distributions (Arch, Ubuntu, Debian, Fedora), access to raw USB HID nodes (`/dev/hidraw*`) is restricted to `root` by default. If you encounter a `NotAllowedError: Failed to open the device` in Chrome/Edge, configure non-root user access via our udev rules:
+
+### Quick One-Liner Install
+```bash
+sudo cp udev/99-dac-peq.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Or write the rule directly:
+```bash
+sudo tee /etc/udev/rules.d/99-dac-peq.rules << 'EOF'
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess"
+EOF
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+> [!NOTE]
+> **Ubuntu / Debian Snap Warning:** If you run Chromium or Chrome installed via **Ubuntu Snap**, Snap's AppArmor sandbox blocks access to `/dev/hidraw*` even with udev rules. Use the official `.deb` package or a Flatpak with device access permissions enabled.
+
+---
 
 We need your help testing devices and capturing USB packets!
 * Read our **[CONTRIBUTING.md](./CONTRIBUTING.md)** guide to see how to capture WebHID sendReport logs in Chrome DevTools or Wireshark.

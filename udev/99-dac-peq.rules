@@ -1,0 +1,21 @@
+# udev rules for dac-peq-manager
+# Grants unprivileged user access to supported USB-C DAC dongles and DSP cables for WebHID and CLI.
+#
+# Installation:
+#   sudo cp 99-dac-peq.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# KTMicro / Kiwi Ears (Allegro Mini, Allegro Pro, S-Link) / Moondrop (FreeDSP, May) / BASN BmasterX
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess"
+
+# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro, STARGATE II) / TTGK
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess"
+
+# FiiO / JadeAudio (JA11, LS-TC2, KA15)
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess"
+
+# WalkPlay Realtek OEM
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
+
+# Celest / Kinera (Wyvern Abyss DSP)
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess"
