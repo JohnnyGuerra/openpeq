@@ -15,8 +15,8 @@
   </script>
   <meta name="description" content="Open-source WebHID flasher for KTMicro KT02H20 / WalkPlay USB DACs (Kiwi Ears Allegro Mini, BASN BmasterX 6) and Host DSP generator for JCALLY JM6 Pro (Conexant CX31993).">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d2ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 10v3'/%3E%3Cpath d='M6 6v11'/%3E%3Cpath d='M10 3v18'/%3E%3Cpath d='M14 8v7'/%3E%3Cpath d='M18 5v13'/%3E%3Cpath d='M22 10v3'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=14">
-  <script type="module" src="app.js?v=20261030_11"></script>
+  <link rel="stylesheet" href="styles.css?v=15">
+  <script type="module" src="app.js?v=20261030_12"></script>
 </head>
 <body>
   <div class="container">
@@ -292,24 +292,24 @@
                 <option value="bass">4. Sub-Bass &amp; Mid-Bass (20 Hz &ndash; 300 Hz)</option>
               </select>
             </div>
-            <div style="display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.1rem;">
-              <button id="btnTonePlay" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Play steady sine tone at the selected slider frequency">▶ Sine Tone</button>
-              <button id="btnToneSweep" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Run continuous logarithmic sine sweep across the chosen mode range">🔄 Run Sweep</button>
-              <button id="btnPinkNoise" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Audition full-spectrum pink noise through the active PEQ filter chain">📻 Pink Noise</button>
+            <div class="tone-transport-group">
+              <button id="btnTonePlay" class="quick-tag tone-transport-btn" title="Play steady sine tone at the selected slider frequency">▶ Sine Tone</button>
+              <button id="btnToneSweep" class="quick-tag tone-transport-btn" title="Run continuous logarithmic sine sweep across the chosen mode range">🔄 Run Sweep</button>
+              <button id="btnPinkNoise" class="quick-tag tone-transport-btn" title="Audition full-spectrum pink noise through the active PEQ filter chain">📻 Pink Noise</button>
             </div>
-            <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.74rem;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band</button>
+            <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.74rem; flex-shrink: 0;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band</button>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem; flex-wrap: wrap;">
           <div id="freqControlRow" style="flex: 1; min-width: 220px; display: flex; align-items: center; gap: 0.5rem;">
             <label for="sliderToneFreq" style="font-size: 0.75rem; color: var(--text-muted); min-width: 35px;">Freq:</label>
             <input type="range" id="sliderToneFreq" aria-label="Sine Tone Frequency (Hz)" min="20" max="20000" step="1" value="7000" style="flex: 1;">
-            <span id="lblToneFreq" style="font-family: var(--font-mono); font-size: 0.78rem; min-width: 60px; text-align: right; color: var(--accent-cyan);">7000 Hz</span>
+            <span id="lblToneFreq" class="tone-readout-freq">7000 Hz</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <label for="sliderToneVol" style="font-size: 0.75rem; color: var(--text-muted);">Volume:</label>
             <input type="range" id="sliderToneVol" aria-label="Tone Generator Safe Volume" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning (keep low)">
-            <span id="lblToneVol" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 45px; color: var(--text-muted);">-30 dB</span>
+            <span id="lblToneVol" class="tone-readout-vol">-30 dB</span>
           </div>
         </div>
       </div>

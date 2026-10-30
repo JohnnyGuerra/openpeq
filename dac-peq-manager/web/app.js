@@ -1647,7 +1647,7 @@ function stopAudioGenerators() {
   }
 }
 
-function startTone(freq = 7000) {
+function startTone(freq = 7000, isSweep = false) {
   const ctx = initSharedAudioContext();
   stopAudioGenerators();
 
@@ -1660,10 +1660,12 @@ function startTone(freq = 7000) {
   isToneActive = true;
   updateTonePlayhead(freq);
 
-  const btnPlay = document.getElementById("btnTonePlay");
-  if (btnPlay) {
-    btnPlay.textContent = "⏹ Stop Sine";
-    btnPlay.classList.add("active");
+  if (!isSweep) {
+    const btnPlay = document.getElementById("btnTonePlay");
+    if (btnPlay) {
+      btnPlay.textContent = "⏹ Stop Sine";
+      btnPlay.classList.add("active");
+    }
   }
 }
 
@@ -2453,7 +2455,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const btnSweep = document.getElementById("btnToneSweep");
     const cfg = SWEEP_RANGES[modeKey] || SWEEP_RANGES.canal;
 
-    startTone(cfg.start);
+    startTone(cfg.start, true);
     if (sliderToneFreq) sliderToneFreq.value = Math.round(cfg.start);
     if (lblToneFreq) lblToneFreq.textContent = `${Math.round(cfg.start)} Hz`;
     if (btnSweep) {

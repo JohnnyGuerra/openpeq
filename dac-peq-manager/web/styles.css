@@ -483,6 +483,57 @@ header {
   margin-top: 0.75rem;
 }
 
+.tone-transport-group {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 102px);
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.1rem;
+  flex-shrink: 0;
+}
+
+.tone-transport-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 102px;
+  min-width: 102px;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.74rem;
+  border: none;
+  margin: 0;
+  white-space: nowrap;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+.tone-readout-freq {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  width: 68px;
+  min-width: 68px;
+  display: inline-block;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.tone-readout-vol {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  width: 48px;
+  min-width: 48px;
+  display: inline-block;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .generator-guide-dialog {
   border: 1px solid rgba(56, 189, 248, 0.35);
   border-radius: var(--radius-md);
