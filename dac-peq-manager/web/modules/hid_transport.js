@@ -26,9 +26,10 @@ export function isWalkplayDsp(dev) {
   if (!dev) return false;
   const prod = (dev.productName || "").toLowerCase();
   return (
-    (dev.vendorId === 0x3302 && (dev.productId === 0xc20f || dev.productId === 0x43cc)) ||
+    (dev.vendorId === 0x3302 && (dev.productId === 0xc20f || dev.productId === 0x43cc || dev.productId === 0x4307 || dev.productId === 0x431d)) ||
     prod.includes("protocol micro") ||
     prod.includes("protocol max") ||
+    prod.includes("space pro") ||
     prod.includes("crinear")
   );
 }

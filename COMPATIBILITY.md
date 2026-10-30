@@ -38,7 +38,7 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **LS-TC2 DSP Cable** | FiiO | KTMicro / FiiO DSP | `0x2972:0x0107` | 5 Bands | Slot 3 | 🟡 | 0.78mm 2-pin replacement cable with inline remote and mic. |
 | **DS3** | Fosi Audio | ESS ES9039Q2M + KTMicro | `0x31B2:0x1118` | 8 Bands | Multi | 🟡 | High-power ES9039Q2M dual-output DAC dongle. |
 | **KEYX DSP Cable** | Truthear | WalkPlay Scheme 15 DSP | `0x3302:0x4362` | 8 Bands | Preset 1-4 | 🟡 | Official Truthear 0.78mm 2-pin Type-C DSP cable. WalkPlay Scheme 15 protocol framing ready in CLI and Web Flasher. |
-| **SPACE Pro** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0x431D` | 10 Bands | Multi | 🟡 | Dual CS43131 flagship dongle with 10-band hardware PEQ (WalkPlay Scheme 15). Protocol framing implemented. |
+| **SPACE Pro** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0x4307` | 10 Bands | Multi | 🟡 | Dual CS43131 flagship dongle with 10-band hardware PEQ (WalkPlay Scheme 15). PID confirmed on physical Linux hardware. Protocol framing implemented. |
 | **STARGATE II** | Tanchjim | Cirrus CS43131 + WalkPlay | `0x3302:0x4353` | 8 Bands | Multi | 🟡 | CS43131 dongle using WalkPlay Scheme 15 framing. Protocol implemented. |
 | **DSP Cable - Memory**| ddHiFi | WalkPlay Scheme 15 DSP | `0x3302` | 8 Bands | Preset 1-4 | 🔵 | Audiophile MMCX / 0.78mm 2-pin Type-C DSP cable. |
 | **Protocol Micro** | CrinEar | WalkPlay CB1300D (Scheme 11) | `0x3302:0xC20F` | 8 Bands | Slot 101 | 🟡 | Crinacle $9.99 ultra-budget dongle with 8-band hardware PEQ. WalkPlay Scheme 11 protocol framing and 96kHz Q2.30 biquad arithmetic reverse-engineered from WebHID traces provided by `@demomanca`. Native Web Flasher & CLI support ready. |

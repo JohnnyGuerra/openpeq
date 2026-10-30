@@ -2,20 +2,25 @@
 # Grants unprivileged user access to supported USB-C DAC dongles and DSP cables for WebHID and CLI.
 #
 # Installation:
-#   sudo cp 99-dac-peq.rules /etc/udev/rules.d/
+#   sudo cp udev/99-dac-peq.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger
 
 # KTMicro / Kiwi Ears (Allegro Mini, Allegro Pro, S-Link) / Moondrop (FreeDSP, May) / BASN BmasterX
+SUBSYSTEM=="usb", ATTRS{idVendor}=="31b2", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="31b2", MODE="0666", TAG+="uaccess"
 
-# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro, STARGATE II) / TTGK
+# WalkPlay / CrinEar (Protocol Micro, Protocol Max) / Tanchjim (SPACE Pro 0x4307, STARGATE II) / TTGK
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3302", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3302", MODE="0666", TAG+="uaccess"
 
 # FiiO / JadeAudio (JA11, LS-TC2, KA15)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2972", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2972", MODE="0666", TAG+="uaccess"
 
 # WalkPlay Realtek OEM
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
 
 # Celest / Kinera (Wyvern Abyss DSP)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="262a", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="262a", MODE="0666", TAG+="uaccess"
