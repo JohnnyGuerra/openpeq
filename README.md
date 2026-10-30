@@ -131,6 +131,20 @@ dac-peq-manager export-apo bmasterx6 --full-target
 
 ---
 
+## 🌐 OS Compatibility & Browser Requirements
+
+The Web Flasher runs client-side in desktop Chromium browsers (**Google Chrome, Brave, Microsoft Edge, Opera**) using the official W3C WebHID API:
+
+| Operating System | Setup Required | Admin / Driver Needed? | Notes |
+| :--- | :---: | :---: | :--- |
+| **macOS** (Apple Silicon & Intel) | **Zero (Plug & Play)** | ❌ No | Handled automatically via `IOKit`. Plug in and click *Connect*. |
+| **Windows** (10 & 11) | **Zero (Plug & Play)** | ❌ No | Works out of the box. *Note:* Close any OEM companion software (e.g. Tanchjim PC app) if running, as Windows grants background apps exclusive HID locks. |
+| **ChromeOS** (Chromebooks) | **Zero (Plug & Play)** | ❌ No | Works natively in the ChromeOS browser. |
+| **Linux** (Arch, Ubuntu, Fedora, Debian) | **One-time udev rule** | ❌ No (after rule) | Linux restricts `/dev/hidraw*` to root by default. Run our one-line [udev setup](#-linux-webhid--udev-setup) to grant desktop seat access (`uaccess`). |
+| **iOS / iPadOS / Android** | **Burn once from PC** | N/A | Apple WebKit does not expose WebHID to mobile browsers. Burn your EQ curve once from a PC/Mac/Chromebook, and it remains permanently active in the DAC hardware on your phone. |
+
+---
+
 ## 🐧 Linux WebHID & udev Setup
 
 On Linux distributions (Arch, Ubuntu, Debian, Fedora), access to raw USB HID nodes (`/dev/hidraw*`) is restricted to `root` by default. If you encounter a `NotAllowedError: Failed to open the device` in Chrome/Edge, configure non-root user access via our udev rules:
@@ -157,6 +171,8 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 > **Ubuntu / Debian Snap Warning:** If you run Chromium or Chrome installed via **Ubuntu Snap**, Snap's AppArmor sandbox blocks access to `/dev/hidraw*` even with udev rules. Use the official `.deb` package or a Flatpak with device access permissions enabled.
 
 ---
+
+## 🤝 Community & Contributing
 
 We need your help testing devices and capturing USB packets!
 * Read our **[CONTRIBUTING.md](./CONTRIBUTING.md)** guide to see how to capture WebHID sendReport logs in Chrome DevTools or Wireshark.
