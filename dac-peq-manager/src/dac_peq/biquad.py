@@ -487,7 +487,7 @@ def decimate_bands(
 
     if len(bands) <= target_bands:
         out = [dict(b) for b in bands]
-        pad_freqs = [60.0, 150.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 17500.0]
+        pad_freqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 16500.0, 18500.0]
         while len(out) < target_bands:
             chosen_f = 1000.0
             for pf in pad_freqs:
@@ -500,6 +500,7 @@ def decimate_bands(
                 "gain": 0.0,
                 "q": 1.0,
             })
+        out.sort(key=lambda x: float(x.get("freq", 1000.0)))
         for i, b in enumerate(out, 1):
             b["index"] = i
         return out

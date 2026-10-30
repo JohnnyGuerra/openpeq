@@ -271,7 +271,7 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
 
   if (bands.length <= target) {
     const out = bands.map((b) => ({ ...b }));
-    const padFreqs = [60.0, 150.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 17500.0];
+    const padFreqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 16500.0, 18500.0];
     while (out.length < target) {
       let chosenF = 1000.0;
       for (const pf of padFreqs) {
@@ -285,6 +285,7 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
       }
       out.push({ type: "PK", freq: chosenF, gain: 0.0, q: 1.0 });
     }
+    out.sort((a, b) => Number(a.freq ?? 1000.0) - Number(b.freq ?? 1000.0));
     return out.map((b, i) => ({ ...b, index: i + 1 }));
   }
 

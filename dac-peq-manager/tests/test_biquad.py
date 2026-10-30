@@ -197,7 +197,7 @@ def test_decimate_bands_landmark_selection():
 
 
 def test_decimate_bands_padding():
-    """Verify small band lists are padded to target band quantity with neutral bypass filters."""
+    """Verify small band lists are padded to target band quantity with neutral bypass filters in ascending frequency order."""
     from dac_peq.biquad import decimate_bands
 
     two_bands = [
@@ -206,10 +206,12 @@ def test_decimate_bands_padding():
     ]
     padded = decimate_bands(two_bands, target_bands=5)
     assert len(padded) == 5
+    freqs = [b["freq"] for b in padded]
+    assert freqs == sorted(freqs)
     assert padded[0]["freq"] == 80.0
-    assert padded[1]["freq"] == 3000.0
-    # Remaining bands are flat bypass
-    for b in padded[2:]:
+    assert padded[-1]["freq"] == 3000.0
+    # Padded middle bands are flat bypass
+    for b in padded[1:-1]:
         assert b["gain"] == 0.0
 
 
