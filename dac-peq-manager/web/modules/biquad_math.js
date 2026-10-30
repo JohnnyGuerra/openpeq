@@ -271,8 +271,19 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
 
   if (bands.length <= target) {
     const out = bands.map((b) => ({ ...b }));
+    const padFreqs = [60.0, 150.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 17500.0];
     while (out.length < target) {
-      out.push({ type: "PK", freq: 1000.0, gain: 0.0, q: 1.0 });
+      let chosenF = 1000.0;
+      for (const pf of padFreqs) {
+        const collides = out.some(
+          (eb) => Math.abs(Math.log10(Math.max(20.0, Number(eb.freq ?? 1000.0))) - Math.log10(pf)) < 0.08
+        );
+        if (!collides) {
+          chosenF = pf;
+          break;
+        }
+      }
+      out.push({ type: "PK", freq: chosenF, gain: 0.0, q: 1.0 });
     }
     return out.map((b, i) => ({ ...b, index: i + 1 }));
   }

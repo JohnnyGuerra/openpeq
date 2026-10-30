@@ -487,10 +487,16 @@ def decimate_bands(
 
     if len(bands) <= target_bands:
         out = [dict(b) for b in bands]
+        pad_freqs = [60.0, 150.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 17500.0]
         while len(out) < target_bands:
+            chosen_f = 1000.0
+            for pf in pad_freqs:
+                if not any(abs(math.log10(max(20.0, float(eb.get("freq", 1000.0)))) - math.log10(pf)) < 0.08 for eb in out):
+                    chosen_f = pf
+                    break
             out.append({
                 "type": "PK",
-                "freq": 1000.0,
+                "freq": chosen_f,
                 "gain": 0.0,
                 "q": 1.0,
             })

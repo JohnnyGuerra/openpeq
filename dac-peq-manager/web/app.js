@@ -17,7 +17,7 @@ import {
   decimateBands,
   applyMacroAdjustments,
   smoothCouplerBiquads,
-} from "./modules/biquad_math.js";
+} from "./modules/biquad_math.js?v=20261030_6";
 
 import {
   formatPipeWireConf,
@@ -107,14 +107,14 @@ const PRESETS = {
   flat: {
     name: "Flat Bypass (0 dB)",
     slug: "flat",
-    description: "Hardware bypass / flat reset - Sets all bands to 1000 Hz 0 dB gain.",
+    description: "Hardware bypass / flat reset - Sets all bands to 0 dB gain across logarithmic centers.",
     preamp: 0.0,
     bands: [
+      { type: "LSQ", freq: 60.0, gain: 0.0, q: 0.71 },
+      { type: "PK", freq: 250.0, gain: 0.0, q: 1.00 },
       { type: "PK", freq: 1000.0, gain: 0.0, q: 1.00 },
-      { type: "PK", freq: 1000.0, gain: 0.0, q: 1.00 },
-      { type: "PK", freq: 1000.0, gain: 0.0, q: 1.00 },
-      { type: "PK", freq: 1000.0, gain: 0.0, q: 1.00 },
-      { type: "PK", freq: 1000.0, gain: 0.0, q: 1.00 },
+      { type: "PK", freq: 3500.0, gain: 0.0, q: 1.00 },
+      { type: "HSQ", freq: 10000.0, gain: 0.0, q: 0.71 },
     ],
   },
   "jm-1": {
@@ -160,6 +160,7 @@ const PRESETS = {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentPreset = JSON.parse(JSON.stringify(PRESETS.bmasterx6));
+currentPreset.fullBands = PRESETS.bmasterx6.bands.map((b) => ({ ...b }));
 let referenceTargetCurve = null;
 let showTargetOverlay = true;
 let connectedHidDevice = null;
@@ -655,11 +656,11 @@ function setHardwareBandArchitecture(bandCount) {
     lblTitle.textContent = `${activeHardwareBands}-Band Biquad Filter Matrix`;
   }
 
-  const sourceBands =
-    currentPreset.fullBands && currentPreset.fullBands.length >= activeHardwareBands
-      ? currentPreset.fullBands
-      : currentPreset.bands;
-  currentPreset.bands = decimateBands(sourceBands, activeHardwareBands);
+  if (!currentPreset.fullBands || currentPreset.fullBands.length === 0) {
+    currentPreset.fullBands = currentPreset.bands.map((b) => ({ ...b }));
+  }
+
+  currentPreset.bands = decimateBands(currentPreset.fullBands, activeHardwareBands);
   resetMacroControls(currentPreset.bands);
   updateEqCapsBadge();
   buildControlsUI();
@@ -1373,8 +1374,8 @@ function selectPreset(slug) {
   const p = PRESETS[slug];
   if (!p) return;
   currentPreset = JSON.parse(JSON.stringify(p));
-  currentPreset.bands = decimateBands(currentPreset.bands, activeHardwareBands);
-  currentPreset.fullBands = null;
+  currentPreset.fullBands = p.bands.map((b) => ({ ...b }));
+  currentPreset.bands = decimateBands(currentPreset.fullBands, activeHardwareBands);
   referenceTargetCurve = null;
 
   if (p.slot_id) {
