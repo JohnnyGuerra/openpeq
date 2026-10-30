@@ -4,10 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dac-peq-manager | Hardware DSP Flasher &amp; Host PEQ Suite</title>
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const savedScheme = localStorage.getItem("color-scheme");
+      if (savedScheme === "light" || savedScheme === "dark") {
+        document.querySelector('meta[name="color-scheme"]').content = savedScheme;
+      }
+    } catch (_) {}
+  </script>
   <meta name="description" content="Open-source WebHID flasher for KTMicro KT02H20 / WalkPlay USB DACs (Kiwi Ears Allegro Mini, BASN BmasterX 6) and Host DSP generator for JCALLY JM6 Pro (Conexant CX31993).">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d2ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 10v3'/%3E%3Cpath d='M6 6v11'/%3E%3Cpath d='M10 3v18'/%3E%3Cpath d='M14 8v7'/%3E%3Cpath d='M18 5v13'/%3E%3Cpath d='M22 10v3'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=3">
-  <script type="module" src="app.js?v=20261030_1"></script>
+  <link rel="stylesheet" href="styles.css?v=8">
+  <script type="module" src="app.js?v=20261030_5"></script>
 </head>
 <body>
   <div class="container">
@@ -49,6 +58,23 @@
         <span id="flashCounterBadge" class="badge" style="background: rgba(148, 163, 184, 0.12); border: 1px solid var(--border-color); font-size: 0.78rem; font-family: var(--font-mono); display: none;" title="Cumulative NVRAM flash commits (wear tracking)">
           Burns: <span id="lblFlashCount" style="color: var(--accent-yellow); font-weight: 700;">0</span>
         </span>
+        <button type="button" id="btnThemeToggle" class="btn btn-secondary theme-toggle-btn" aria-label="Switch color theme" title="Toggle Light / Dark color theme">
+          <svg id="iconThemeSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg id="iconThemeMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <span>Theme</span>
+        </button>
         <button id="btnConnect" class="btn btn-primary" title="Request WebHID access to USB Audio DSP">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
@@ -63,7 +89,7 @@
 
     <main id="main-content">
     <!-- Mobile Android WebHID Advisory Banner -->
-    <div id="mobileWebHidBanner" class="safety-alert" style="background: rgba(56, 189, 248, 0.12); border-color: var(--accent-cyan); color: #bae6fd;" role="region" aria-label="Mobile Browser Advisory">
+    <div id="mobileWebHidBanner" class="safety-alert" style="background: rgba(56, 189, 248, 0.12); border-color: var(--accent-cyan); color: var(--text-info-alert);" role="region" aria-label="Mobile Browser Advisory">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;" aria-hidden="true">
         <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
         <line x1="12" y1="18" x2="12.01" y2="18"/>
@@ -131,7 +157,7 @@
         <div class="preset-card" data-preset="jm-1" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>JM-1 Target</span>
-            <span class="tag" style="color: #d8b4fe;">Modern Target</span>
+            <span class="tag" style="color: var(--accent-purple);">Modern Target</span>
           </h3>
           <p>Jaytiss human impedance target: Deep sub-bass with smooth, non-fatiguing 3kHz ear gain.</p>
         </div>
@@ -190,7 +216,7 @@
     </section>
 
     <!-- Acoustic Coupler Artifact Advisory Banner -->
-    <div id="acousticAlert" class="safety-alert" style="background: rgba(245, 158, 11, 0.12); border-color: var(--accent-yellow); color: #fde68a;" role="alert">
+    <div id="acousticAlert" class="safety-alert" style="background: rgba(245, 158, 11, 0.12); border-color: var(--accent-yellow); color: var(--text-warn-alert);" role="alert">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;" aria-hidden="true">
         <circle cx="12" cy="12" r="10"/>
         <line x1="12" y1="8" x2="12" y2="12"/>
@@ -201,7 +227,7 @@
           <!-- Dynamically populated if coupler artifacts are detected -->
         </div>
         <div style="margin-top: 0.45rem;">
-          <button type="button" id="btnSmoothCoupler" class="quick-tag" style="padding: 0.22rem 0.65rem; font-size: 0.76rem; color: #fde68a; border-color: var(--accent-yellow); background: rgba(245, 158, 11, 0.2);" title="Relax narrow 7.4–9.6 kHz coupler resonance cuts to Q=1.4 for natural treble">
+          <button type="button" id="btnSmoothCoupler" class="quick-tag" style="padding: 0.22rem 0.65rem; font-size: 0.76rem; color: var(--text-warn-alert); border-color: var(--accent-yellow); background: rgba(245, 158, 11, 0.16);" title="Relax narrow 7.4–9.6 kHz coupler resonance cuts to Q=1.4 for natural treble">
             ✨ Smooth 711 Coupler Spike
           </button>
         </div>
@@ -215,22 +241,22 @@
           <h2 class="section-title" style="margin-bottom: 0;">Frequency Response (20 Hz &ndash; 20 kHz)</h2>
           <div id="targetLegend" class="target-legend" style="display: none;">
             <span style="display: inline-block; width: 14px; height: 0; border-top: 2px dashed var(--accent-purple);"></span>
-            <span id="lblTargetName" style="color: #d8b4fe; font-weight: 600;">Target Curve</span>
+            <span id="lblTargetName" style="color: var(--accent-purple); font-weight: 600;">Target Curve</span>
             <span id="lblTargetRms" style="color: var(--accent-yellow); font-family: var(--font-mono); font-size: 0.72rem;">(RMS: ±0.0 dB)</span>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <div class="graph-controls-bar" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
           <!-- Target & Preference Bounds Selector -->
-          <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; background: var(--bg-card); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div class="target-bounds-pill" style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; font-size: 0.75rem; background: var(--bg-card); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
             <label for="selTargetCurve" style="color: var(--text-muted);">Target:</label>
-            <select id="selTargetCurve" aria-label="Target Reference Curve" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);">
+            <select id="selTargetCurve" aria-label="Target Reference Curve" style="width: auto; max-width: 100%; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);">
               <option value="none">None (Off)</option>
               <option value="harman-2019v2">Harman In-Ear 2019v2</option>
               <option value="jm-1">JM-1 Modern Target</option>
               <option value="ief-neutral">IEF Neutral (Crinacle)</option>
             </select>
             <label for="selPreferenceTolerance" style="color: var(--text-muted); margin-left: 0.3rem;">Bounds:</label>
-            <select id="selPreferenceTolerance" aria-label="Preference Tolerance Bounds" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
+            <select id="selPreferenceTolerance" aria-label="Preference Tolerance Bounds" style="width: auto; max-width: 100%; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
               <option value="1.5">±1.5 dB</option>
               <option value="2.0" selected>±2.0 dB</option>
               <option value="3.0">±3.0 dB</option>
@@ -305,8 +331,8 @@
         </ul>
       </div>
 
-      <div class="guide-step-card" style="border-left: 3px solid #f472b6;">
-        <h4 style="color: #f472b6;">2. Verify Natural Tonal Balance (Pink Noise)</h4>
+      <div class="guide-step-card" style="border-left: 3px solid var(--accent-pink);">
+        <h4 style="color: var(--accent-pink);">2. Verify Natural Tonal Balance (Pink Noise)</h4>
         <p>Pink noise contains equal acoustic energy per octave (falling at 3 dB/octave), perfectly mimicking how human hearing judges spectral balance across bass, mids, and treble.</p>
         <ul>
           <li><strong>Step A:</strong> Click <strong>📻 Pink Noise</strong> after tweaking your PEQ curve.</li>
@@ -330,9 +356,9 @@
             5 Bands | Step 0.1 dB | Reg 0x11/0x66 Guarded
           </span>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem;">
+        <div class="matrix-arch-bar" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; max-width: 100%; font-size: 0.78rem;">
           <label for="selHardwareBandCount" style="color: var(--text-muted);">DSP Architecture:</label>
-          <select id="selHardwareBandCount" aria-label="DSP Hardware Band Architecture" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;" title="Select hardware biquad band count">
+          <select id="selHardwareBandCount" aria-label="DSP Hardware Band Architecture" style="width: auto; max-width: 100%; padding: 0.2rem 0.5rem; font-size: 0.78rem;" title="Select hardware biquad band count">
             <option value="5" selected>5-Band (KTMicro KT02H20 / Allegro Mini / JA11)</option>
             <option value="8">8-Band (CrinEar Protocol Micro / WalkPlay)</option>
             <option value="9">9-Band (Moondrop FreeDSP / May)</option>
@@ -399,7 +425,7 @@
 
       <!-- Hardware Slot & DAC Reconstruction Filter -->
       <div class="extra-group">
-        <div style="display: grid; grid-template-columns: 1fr 1.6fr; gap: 0.5rem;">
+        <div class="slot-filter-grid">
           <div>
             <label for="selHardwareSlot" class="control-label">
               <span>Memory Slot (0x24)</span>
@@ -470,7 +496,7 @@
             </svg>
             Restore Stock Backup
           </button>
-          <button id="btnClearFlash" class="btn btn-secondary" style="color: #f87171; border-color: rgba(239, 68, 68, 0.45);" title="Hardware Factory Reset: Sends 0x43 CLEAR command to erase NVRAM and restore out-of-the-box factory state">
+          <button id="btnClearFlash" class="btn btn-secondary" style="color: var(--accent-red); border-color: rgba(239, 68, 68, 0.45);" title="Hardware Factory Reset: Sends 0x43 CLEAR command to erase NVRAM and restore out-of-the-box factory state">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 6h18"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

@@ -295,6 +295,9 @@ function renderCurve() {
   });
 
   // 2. Grid Lines (Vertical Frequency)
+  const isCompactGraph = width < 460;
+  const COMPACT_OMIT_LABELS = new Set([50, 200, 2000, 5000]);
+
   FREQ_TICKS.forEach((f) => {
     const x = xForFreq(f, width);
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -304,6 +307,8 @@ function renderCurve() {
     line.setAttribute("y2", height);
     line.setAttribute("class", "grid-line");
     svg.appendChild(line);
+
+    if (isCompactGraph && COMPACT_OMIT_LABELS.has(f)) return;
 
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", x);
@@ -469,24 +474,32 @@ function renderCurve() {
     group.setAttribute("aria-valuetext", `${Math.round(b.freq)} Hz, ${b.gain > 0 ? "+" : ""}${b.gain.toFixed(1)} dB`);
     group.setAttribute("class", "band-node-group");
 
+    const hitCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    hitCircle.setAttribute("cx", x);
+    hitCircle.setAttribute("cy", y);
+    hitCircle.setAttribute("r", 16);
+    hitCircle.setAttribute("fill", "transparent");
+    hitCircle.setAttribute("stroke", "none");
+
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circle.setAttribute("cx", x);
     circle.setAttribute("cy", y);
-    circle.setAttribute("r", 6);
-    circle.setAttribute("fill", "#00d2ff");
+    circle.setAttribute("r", width < 480 ? 7.5 : 6);
+    circle.setAttribute("fill", "var(--accent-cyan)");
     circle.setAttribute("stroke", "#ffffff");
     circle.setAttribute("stroke-width", 2);
     circle.setAttribute("class", "band-marker");
 
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", x);
-    text.setAttribute("y", y - 10);
+    text.setAttribute("y", y - (width < 480 ? 11 : 10));
     text.setAttribute("text-anchor", "middle");
-    text.setAttribute("fill", "#f8fafc");
+    text.setAttribute("fill", "var(--text-primary)");
     text.setAttribute("font-size", "11px");
     text.setAttribute("font-weight", "bold");
     text.textContent = i + 1;
 
+    group.appendChild(hitCircle);
     group.appendChild(circle);
     group.appendChild(text);
     svg.appendChild(group);
@@ -1995,6 +2008,64 @@ function showToast(msg) {
 
 // ── Initialization ────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
+  // ── Light / Dark Theme Toggle (Modern Web Guidance Pattern) ───────────────
+  const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+  const btnThemeToggle = document.getElementById("btnThemeToggle");
+
+  function getActiveRenderedScheme() {
+    const content = metaColorScheme?.content || "light dark";
+    if (content === "dark" || content === "light") return content;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function updateThemeButtonUI() {
+    const active = getActiveRenderedScheme();
+    if (btnThemeToggle) {
+      btnThemeToggle.setAttribute(
+        "aria-label",
+        `Theme: Switch to ${active === "dark" ? "Light" : "Dark"} Mode`
+      );
+      btnThemeToggle.setAttribute(
+        "title",
+        `Theme: Switch to ${active === "dark" ? "Light" : "Dark"} Mode`
+      );
+    }
+  }
+
+  updateThemeButtonUI();
+
+  btnThemeToggle?.addEventListener("click", () => {
+    if (!metaColorScheme) return;
+    const currentDark = getActiveRenderedScheme() === "dark";
+    const nextScheme = currentDark ? "light" : "dark";
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    if ((systemDark && nextScheme === "dark") || (!systemDark && nextScheme === "light")) {
+      metaColorScheme.content = "light dark";
+      try {
+        localStorage.removeItem("color-scheme");
+      } catch (_) {}
+    } else {
+      metaColorScheme.content = nextScheme;
+      try {
+        localStorage.setItem("color-scheme", nextScheme);
+      } catch (_) {}
+    }
+    updateThemeButtonUI();
+    showToast(`Switched to ${nextScheme === "dark" ? "🌙 Dark" : "☀️ Light"} Mode`);
+  });
+
+  window.addEventListener("storage", (e) => {
+    if (e.key === "color-scheme" && metaColorScheme) {
+      metaColorScheme.content = e.newValue || "light dark";
+      updateThemeButtonUI();
+    }
+  });
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    updateThemeButtonUI();
+  });
+
   // Initialize Rust WebAssembly DSP Core
   initWasmEngine().then((ready) => {
     if (ready) {
@@ -2503,5 +2574,20 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  window.addEventListener("resize", () => renderCurve());
+  const svgEl = document.getElementById("eqSvg");
+  if (window.ResizeObserver && svgEl) {
+    let lastSvgWidth = svgEl.clientWidth;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.round(entry.contentRect.width);
+        if (w > 0 && Math.abs(w - lastSvgWidth) >= 2) {
+          lastSvgWidth = w;
+          renderCurve();
+        }
+      }
+    });
+    ro.observe(svgEl);
+  } else {
+    window.addEventListener("resize", () => renderCurve());
+  }
 });
