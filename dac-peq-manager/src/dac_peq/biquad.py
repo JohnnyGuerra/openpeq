@@ -487,7 +487,21 @@ def decimate_bands(
 
     if len(bands) <= target_bands:
         out = [dict(b) for b in bands]
-        pad_freqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 16500.0, 18500.0]
+        has_high_shelf = any(
+            str(b.get("type", "PK")).upper() in ("HSQ", "HIGH_SHELF", "HIGHSHELF")
+            for b in out
+        )
+        max_existing_f = max((float(b.get("freq", 1000.0)) for b in out), default=1000.0)
+        if not has_high_shelf and len(out) < target_bands and max_existing_f >= 6000.0:
+            air_f = 12500.0 if max_existing_f < 11000.0 else min(18000.0, round(max_existing_f * 1.25))
+            out.append({
+                "type": "HSQ",
+                "freq": air_f,
+                "gain": 0.0,
+                "q": 0.71,
+            })
+
+        pad_freqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 8000.0, 12500.0, 15000.0, 17500.0]
         while len(out) < target_bands:
             chosen_f = 1000.0
             for pf in pad_freqs:

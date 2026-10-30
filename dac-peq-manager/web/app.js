@@ -17,7 +17,7 @@ import {
   decimateBands,
   applyMacroAdjustments,
   smoothCouplerBiquads,
-} from "./modules/biquad_math.js?v=20261030_9";
+} from "./modules/biquad_math.js?v=20261030_10";
 
 import {
   formatPipeWireConf,

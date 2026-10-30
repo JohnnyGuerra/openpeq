@@ -271,7 +271,17 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
 
   if (bands.length <= target) {
     const out = bands.map((b) => ({ ...b }));
-    const padFreqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 10000.0, 14000.0, 16500.0, 18500.0];
+    const hasHighShelf = out.some((b) => {
+      const t = String(b.type || "PK").toUpperCase();
+      return t === "HSQ" || t === "HIGH_SHELF" || t === "HIGHSHELF";
+    });
+    const maxExistingF = out.reduce((m, b) => Math.max(m, Number(b.freq ?? 1000.0)), 1000.0);
+    if (!hasHighShelf && out.length < target && maxExistingF >= 6000.0) {
+      const airF = maxExistingF < 11000.0 ? 12500.0 : Math.min(18000.0, Math.round(maxExistingF * 1.25));
+      out.push({ type: "HSQ", freq: airF, gain: 0.0, q: 0.71 });
+    }
+
+    const padFreqs = [120.0, 350.0, 750.0, 1500.0, 3000.0, 6000.0, 8000.0, 12500.0, 15000.0, 17500.0];
     while (out.length < target) {
       let chosenF = 1000.0;
       for (const pf of padFreqs) {
