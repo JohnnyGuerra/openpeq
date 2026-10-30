@@ -193,20 +193,53 @@ function resetMacroControls(newBaselineBands = null) {
 
 function updateEqCapsBadge(dev = null) {
   const badge = document.getElementById("eqCapsBadge");
-  if (!badge) return;
   const activeDev = dev || connectedHidDevice;
-  const isJa11 = activeDev && activeDev.vendorId === 0x2972 && activeDev.productId === 0x0102;
+  const isJa11 = activeDev && (activeDev.vendorId === 0x2972 || activeDev.vendorId === 10610);
+  const isKiwiMini = activeDev && (activeDev.vendorId === 0x31b2 || activeDev.vendorId === 12722) && activeHardwareBands === 5;
   const isWalkplay = activeHardwareBands === 8 || activeHardwareBands === 10 || (activeDev && isWalkplayDsp(activeDev));
   const isMoondrop = activeHardwareBands === 9 || (activeDev && isMoondropFreeDsp(activeDev));
 
-  if (isWalkplay) {
-    badge.textContent = `${activeHardwareBands} Bands (WalkPlay) | Step 0.1 dB | Preamp Supported`;
-  } else if (isMoondrop) {
-    badge.textContent = `9 Bands (Moondrop DSP) | Step 0.1 dB | Preamp Supported`;
-  } else if (isJa11) {
-    badge.textContent = `5 Bands (JA11 KT02H20) | Step 0.1 dB | Reg 0x11/0x66 Supported`;
-  } else {
-    badge.textContent = `5 Bands (KT02H20 Safe Mode) | Step 0.1 dB | Reg 0x11/0x66 Guarded`;
+  if (badge) {
+    if (isWalkplay) {
+      badge.textContent = `${activeHardwareBands} Bands (WalkPlay) | Step 0.1 dB | Preamp Supported`;
+    } else if (isMoondrop) {
+      badge.textContent = `9 Bands (Moondrop DSP) | Step 0.1 dB | Preamp Supported`;
+    } else if (isJa11) {
+      badge.textContent = `5 Bands (JA11 KT02H20) | Step 0.1 dB | Reg 0x11/0x66 Supported`;
+    } else {
+      badge.textContent = `5 Bands (KT02H20 Safe Mode) | Step 0.1 dB | Reg 0x11/0x66 Guarded`;
+    }
+  }
+
+  // Register 0x11 (DAC Filter) & 0x66 (Preamp) Visual Guardrails
+  const selDacFilter = document.getElementById("selDacFilter");
+  const lblDacGuard = document.getElementById("lblDacFilterGuard");
+  const lblPreampGuard = document.getElementById("lblPreampGuard");
+
+  if (selDacFilter && lblDacGuard) {
+    if (isJa11) {
+      selDacFilter.disabled = false;
+      lblDacGuard.textContent = "JA11 Active";
+      lblDacGuard.className = "guard-pill active";
+    } else if (activeDev && !isDemoMode) {
+      selDacFilter.disabled = true;
+      lblDacGuard.textContent = "Guarded (0x11 Blocked)";
+      lblDacGuard.className = "guard-pill guarded";
+    } else {
+      selDacFilter.disabled = false;
+      lblDacGuard.textContent = "JA11 Only";
+      lblDacGuard.className = "guard-pill";
+    }
+  }
+
+  if (lblPreampGuard) {
+    if (isKiwiMini && !isDemoMode) {
+      lblPreampGuard.style.display = "inline-flex";
+      lblPreampGuard.textContent = "Unity on 0x31B2 (Host Only)";
+      lblPreampGuard.className = "guard-pill guarded";
+    } else {
+      lblPreampGuard.style.display = "none";
+    }
   }
 }
 
@@ -419,12 +452,22 @@ function renderCurve() {
   svg.appendChild(curvePath);
 
   // 4. Band Control Nodes
+  const prevFocusedBand = document.activeElement?.closest?.("g[data-index]")?.getAttribute("data-index");
+
   currentPreset.bands.forEach((b, i) => {
     const x = xForFreq(b.freq, width);
     const y = yForDb(b.gain + currentPreset.preamp, height);
 
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     group.setAttribute("data-index", i);
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("role", "slider");
+    group.setAttribute("aria-label", `Band ${i + 1} (${b.type || "PK"} at ${Math.round(b.freq)} Hz)`);
+    group.setAttribute("aria-valuemin", "-12");
+    group.setAttribute("aria-valuemax", "12");
+    group.setAttribute("aria-valuenow", String(b.gain));
+    group.setAttribute("aria-valuetext", `${Math.round(b.freq)} Hz, ${b.gain > 0 ? "+" : ""}${b.gain.toFixed(1)} dB`);
+    group.setAttribute("class", "band-node-group");
 
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circle.setAttribute("cx", x);
@@ -450,7 +493,36 @@ function renderCurve() {
 
     group.addEventListener("mousedown", (e) => startDrag(e, i));
     group.addEventListener("touchstart", (e) => startDragTouch(e, i), { passive: false });
+    group.addEventListener("keydown", (e) => {
+      const gainStep = e.shiftKey ? 1.0 : 0.2;
+      const freqMultiplier = e.shiftKey ? 1.05 : 1.015;
+      let handled = true;
+      if (e.key === "ArrowUp") {
+        currentPreset.bands[i].gain = Math.max(-12, Math.min(12, parseFloat((currentPreset.bands[i].gain + gainStep).toFixed(1))));
+      } else if (e.key === "ArrowDown") {
+        currentPreset.bands[i].gain = Math.max(-12, Math.min(12, parseFloat((currentPreset.bands[i].gain - gainStep).toFixed(1))));
+      } else if (e.key === "ArrowRight") {
+        const nextF = Math.max(currentPreset.bands[i].freq + 1, Math.round(currentPreset.bands[i].freq * freqMultiplier));
+        currentPreset.bands[i].freq = Math.max(20, Math.min(20000, nextF));
+      } else if (e.key === "ArrowLeft") {
+        const prevF = Math.min(currentPreset.bands[i].freq - 1, Math.round(currentPreset.bands[i].freq / freqMultiplier));
+        currentPreset.bands[i].freq = Math.max(20, Math.min(20000, prevF));
+      } else {
+        handled = false;
+      }
+      if (handled) {
+        e.preventDefault();
+        syncBandControls(i);
+        renderCurve();
+        triggerAutoApply();
+      }
+    });
   });
+
+  if (prevFocusedBand !== null && prevFocusedBand !== undefined) {
+    const restoredGroup = svg.querySelector(`g[data-index="${prevFocusedBand}"]`);
+    if (restoredGroup) restoredGroup.focus();
+  }
 
   updateStats();
   updateWebAudioFilters();
@@ -633,6 +705,7 @@ async function initializeDevice(dev, isSilent = false) {
     document.getElementById("btnReadDac").disabled = false;
     document.getElementById("btnFlash").disabled = false;
     updateDeviceBadge("connected", `${dacDisplayName} - Ready`);
+    updateEqCapsBadge(dev);
 
     const slotId = parseInt(document.getElementById("selHardwareSlot")?.value || "3", 10);
     const btnRestore = document.getElementById("btnRestoreStock");
@@ -659,6 +732,7 @@ function handleDeviceDisconnect(reason = "DAC disconnected.") {
   }
   connectedHidDevice = null;
   updateFlashCounterBadge(null);
+  updateEqCapsBadge(null);
   const btnRestore = document.getElementById("btnRestoreStock");
   if (btnRestore) btnRestore.style.display = "none";
   if (!isDemoMode) {
@@ -1156,7 +1230,7 @@ function buildControlsUI() {
         <div class="band-num">
           <span class="band-pill">${i + 1}</span> Band ${i + 1}
         </div>
-        <select id="type_${i}" style="width: 100px;">
+        <select id="type_${i}" aria-label="Band ${i + 1} Filter Type" style="width: 100px;">
           <option value="PK" ${b.type === "PK" ? "selected" : ""}>Peaking</option>
           <option value="LSQ" ${b.type === "LSQ" ? "selected" : ""}>Low-Shelf</option>
           <option value="HSQ" ${b.type === "HSQ" ? "selected" : ""}>High-Shelf</option>
@@ -1165,26 +1239,26 @@ function buildControlsUI() {
 
       <div class="control-row">
         <div class="control-label">
-          <span>Freq</span>
+          <label for="freq_${i}">Freq</label>
           <span id="lblFreq_${i}">${Math.round(b.freq)} Hz</span>
         </div>
-        <input type="range" id="freq_${i}" min="20" max="20000" step="1" value="${b.freq}">
+        <input type="range" id="freq_${i}" aria-label="Band ${i + 1} Frequency (Hz)" min="20" max="20000" step="1" value="${b.freq}">
       </div>
 
       <div class="control-row">
         <div class="control-label">
-          <span>Gain</span>
+          <label for="gain_${i}">Gain</label>
           <span id="lblGain_${i}">${(b.gain > 0 ? "+" : "") + b.gain.toFixed(1)} dB</span>
         </div>
-        <input type="range" id="gain_${i}" min="-12" max="12" step="0.1" value="${b.gain}">
+        <input type="range" id="gain_${i}" aria-label="Band ${i + 1} Gain (dB)" min="-12" max="12" step="0.1" value="${b.gain}">
       </div>
 
       <div class="control-row">
         <div class="control-label">
-          <span>Q Factor</span>
+          <label for="q_${i}">Q Factor</label>
           <span id="lblQ_${i}">${b.q.toFixed(2)}</span>
         </div>
-        <input type="range" id="q_${i}" min="0.1" max="10" step="0.05" value="${b.q}">
+        <input type="range" id="q_${i}" aria-label="Band ${i + 1} Q Factor" min="0.1" max="10" step="0.05" value="${b.q}">
       </div>
     `;
     container.appendChild(card);
@@ -1296,7 +1370,9 @@ function selectPreset(slug) {
   }
 
   document.querySelectorAll(".preset-card").forEach((card) => {
-    card.classList.toggle("active", card.getAttribute("data-preset") === slug);
+    const isSelected = card.getAttribute("data-preset") === slug;
+    card.classList.toggle("active", isSelected);
+    card.setAttribute("aria-pressed", isSelected ? "true" : "false");
   });
 
   buildControlsUI();
@@ -1360,10 +1436,25 @@ function exportQudelixProfile() {
 
 // ── Web Audio Test Tone Generator & Real-Time DSP Chain ──────────────────────
 let audioCtx = null;
+let toneOsc = null;
 let noiseNode = null;
+let masterVolGainNode = null;
 let preampGainNode = null;
 let webAudioFiltNodes = [];
+let isToneActive = false;
 let isPlayingNoise = false;
+let sweepInterval = null;
+
+function initSharedAudioContext() {
+  if (!audioCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioCtx();
+  }
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
 
 function getWebAudioFilterType(ftype) {
   const t = String(ftype || "PK").toUpperCase();
@@ -1372,10 +1463,52 @@ function getWebAudioFilterType(ftype) {
   return "peaking";
 }
 
+function connectSourceThroughDspChain(sourceNode, baseVolumeMultiplier = 1.0) {
+  const ctx = initSharedAudioContext();
+  masterVolGainNode = ctx.createGain();
+  const sliderVol = document.getElementById("sliderToneVol");
+  const vol = sliderVol ? parseFloat(sliderVol.value) || 0.03 : 0.03;
+  masterVolGainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+  masterVolGainNode.gain.exponentialRampToValueAtTime(vol * baseVolumeMultiplier, ctx.currentTime + 0.04);
+
+  sourceNode.connect(masterVolGainNode);
+
+  // Double-EQ Guard:
+  // When a physical hardware DSP DAC is actively connected (and not in demo mode),
+  // output flat signal directly so the hardware DSP performs the filtering.
+  // In Demo Mode or Host-DSP mode, build the Web Audio BiquadFilterNode chain.
+  if (connectedHidDevice && !isDemoMode) {
+    masterVolGainNode.connect(ctx.destination);
+    return false;
+  }
+
+  preampGainNode = ctx.createGain();
+  const linearGain = Math.pow(10, (Number(currentPreset.preamp) || 0.0) / 20);
+  preampGainNode.gain.setValueAtTime(linearGain, ctx.currentTime);
+
+  masterVolGainNode.connect(preampGainNode);
+  let lastNode = preampGainNode;
+
+  webAudioFiltNodes = [];
+  const bands = currentPreset.bands || [];
+  for (let i = 0; i < bands.length; i++) {
+    const b = bands[i];
+    const filt = ctx.createBiquadFilter();
+    filt.type = getWebAudioFilterType(b.type);
+    filt.frequency.setValueAtTime(Math.max(20, Math.min(20000, Number(b.freq) || 1000)), ctx.currentTime);
+    filt.gain.setValueAtTime(Number(b.gain) || 0.0, ctx.currentTime);
+    filt.Q.setValueAtTime(Math.max(0.1, Math.min(20, Number(b.q) || 1.0)), ctx.currentTime);
+    lastNode.connect(filt);
+    lastNode = filt;
+    webAudioFiltNodes.push(filt);
+  }
+
+  lastNode.connect(ctx.destination);
+  return true;
+}
+
 function updateWebAudioFilters() {
-  if (!isPlayingNoise || !audioCtx) return;
-  // Double-EQ Guard: If physical hardware DAC is connected, skip software biquad processing
-  // to avoid double-EQing through the DAC's hardware DSP
+  if ((!isPlayingNoise && !isToneActive) || !audioCtx) return;
   if (connectedHidDevice && !isDemoMode) return;
 
   const now = audioCtx.currentTime;
@@ -1400,16 +1533,102 @@ function updateWebAudioFilters() {
   }
 }
 
-async function toggleTestNoise() {
-  const btn = document.getElementById("btnTestNoise");
-  if (!isPlayingNoise) {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") {
-      await audioCtx.resume();
+function stopAudioGenerators() {
+  if (sweepInterval) {
+    clearInterval(sweepInterval);
+    sweepInterval = null;
+    const btnSweep = document.getElementById("btnToneSweep");
+    if (btnSweep) {
+      btnSweep.textContent = "🔄 Sweep (4k-10k)";
+      btnSweep.classList.remove("active");
     }
+  }
 
-    const bufferSize = audioCtx.sampleRate * 2;
-    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  if (masterVolGainNode && audioCtx) {
+    try {
+      masterVolGainNode.gain.linearRampToValueAtTime(0.0001, audioCtx.currentTime + 0.025);
+    } catch (_) {}
+  }
+
+  if (toneOsc) {
+    const oscToStop = toneOsc;
+    toneOsc = null;
+    try {
+      oscToStop.stop();
+      oscToStop.disconnect();
+    } catch (_) {}
+  }
+
+  if (noiseNode) {
+    const nodeToStop = noiseNode;
+    noiseNode = null;
+    try {
+      nodeToStop.stop();
+      nodeToStop.disconnect();
+    } catch (_) {}
+  }
+
+  if (masterVolGainNode) {
+    try { masterVolGainNode.disconnect(); } catch (_) {}
+    masterVolGainNode = null;
+  }
+  if (preampGainNode) {
+    try { preampGainNode.disconnect(); } catch (_) {}
+    preampGainNode = null;
+  }
+  for (const f of webAudioFiltNodes) {
+    try { f.disconnect(); } catch (_) {}
+  }
+  webAudioFiltNodes = [];
+
+  isToneActive = false;
+  isPlayingNoise = false;
+
+  const btnPlay = document.getElementById("btnTonePlay");
+  if (btnPlay) {
+    btnPlay.textContent = "▶ Sine Tone";
+    btnPlay.classList.remove("active");
+  }
+
+  const btnPink = document.getElementById("btnPinkNoise");
+  if (btnPink) {
+    btnPink.textContent = "📻 Pink Noise";
+    btnPink.classList.remove("active");
+  }
+
+  const btnTest = document.getElementById("btnTestNoise");
+  if (btnTest) {
+    btnTest.textContent = "Play Pink Noise";
+    btnTest.classList.remove("btn-burn");
+  }
+}
+
+function startTone(freq = 7000) {
+  const ctx = initSharedAudioContext();
+  stopAudioGenerators();
+
+  toneOsc = ctx.createOscillator();
+  toneOsc.type = "sine";
+  toneOsc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+  connectSourceThroughDspChain(toneOsc, 1.0);
+  toneOsc.start();
+  isToneActive = true;
+
+  const btnPlay = document.getElementById("btnTonePlay");
+  if (btnPlay) {
+    btnPlay.textContent = "⏹ Stop Sine";
+    btnPlay.classList.add("active");
+  }
+}
+
+async function toggleTestNoise() {
+  if (!isPlayingNoise) {
+    const ctx = initSharedAudioContext();
+    stopAudioGenerators();
+
+    const bufferSize = ctx.sampleRate * 4;
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
 
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -1421,74 +1640,36 @@ async function toggleTestNoise() {
       b3 = 0.86650 * b3 + white * 0.3104856;
       b4 = 0.55000 * b4 + white * 0.5329522;
       b5 = -0.7616 * b5 - white * 0.0168980;
-      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
+      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
       b6 = white * 0.115926;
     }
 
-    noiseNode = audioCtx.createBufferSource();
+    noiseNode = ctx.createBufferSource();
     noiseNode.buffer = noiseBuffer;
     noiseNode.loop = true;
 
-    // Double-EQ Guard:
-    // When a physical hardware DSP DAC is actively connected (and not in demo mode),
-    // output flat noise directly so the hardware DSP performs the filtering.
-    // In Demo Mode or Host-DSP mode, build the Web Audio BiquadFilterNode chain.
-    if (connectedHidDevice && !isDemoMode) {
-      noiseNode.connect(audioCtx.destination);
-      showToast("Live auditioning via connected hardware DSP DAC (hardware-filtered).");
+    const usingSoftwareChain = connectSourceThroughDspChain(noiseNode, 1.2);
+    if (usingSoftwareChain) {
+      showToast("Live browser auditioning active via Web Audio PEQ filter chain!");
     } else {
-      preampGainNode = audioCtx.createGain();
-      const linearGain = Math.pow(10, (Number(currentPreset.preamp) || 0.0) / 20);
-      preampGainNode.gain.setValueAtTime(linearGain, audioCtx.currentTime);
-
-      noiseNode.connect(preampGainNode);
-      let lastNode = preampGainNode;
-
-      webAudioFiltNodes = [];
-      const bands = currentPreset.bands || [];
-      for (let i = 0; i < bands.length; i++) {
-        const b = bands[i];
-        const filt = audioCtx.createBiquadFilter();
-        filt.type = getWebAudioFilterType(b.type);
-        filt.frequency.setValueAtTime(Math.max(20, Math.min(20000, Number(b.freq) || 1000)), audioCtx.currentTime);
-        filt.gain.setValueAtTime(Number(b.gain) || 0.0, audioCtx.currentTime);
-        filt.Q.setValueAtTime(Math.max(0.1, Math.min(20, Number(b.q) || 1.0)), audioCtx.currentTime);
-        lastNode.connect(filt);
-        lastNode = filt;
-        webAudioFiltNodes.push(filt);
-      }
-
-      lastNode.connect(audioCtx.destination);
-      showToast("Live browser auditioning active via Web Audio API filter chain!");
+      showToast("Live auditioning via connected hardware DSP DAC (hardware-filtered).");
     }
 
     noiseNode.start();
     isPlayingNoise = true;
-    if (btn) {
-      btn.textContent = "Stop Pink Noise";
-      btn.classList.add("btn-burn");
+
+    const btnPink = document.getElementById("btnPinkNoise");
+    if (btnPink) {
+      btnPink.textContent = "⏹ Stop Noise";
+      btnPink.classList.add("active");
+    }
+    const btnTest = document.getElementById("btnTestNoise");
+    if (btnTest) {
+      btnTest.textContent = "Stop Pink Noise";
+      btnTest.classList.add("btn-burn");
     }
   } else {
-    if (noiseNode) {
-      try {
-        noiseNode.stop();
-        noiseNode.disconnect();
-      } catch (_) {}
-      noiseNode = null;
-    }
-    if (preampGainNode) {
-      try { preampGainNode.disconnect(); } catch (_) {}
-      preampGainNode = null;
-    }
-    for (const f of webAudioFiltNodes) {
-      try { f.disconnect(); } catch (_) {}
-    }
-    webAudioFiltNodes = [];
-    isPlayingNoise = false;
-    if (btn) {
-      btn.textContent = "Play Pink Noise";
-      btn.classList.remove("btn-burn");
-    }
+    stopAudioGenerators();
   }
 }
 
@@ -1523,6 +1704,9 @@ async function performDatabaseSearch() {
   matched.forEach((e) => {
     const card = document.createElement("div");
     card.className = "db-result-card";
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Load ${e.name} from ${e.source}`);
     card.innerHTML = `
       <div class="db-result-name">${e.name}</div>
       <div class="db-result-meta">
@@ -1531,6 +1715,12 @@ async function performDatabaseSearch() {
       </div>
     `;
     card.addEventListener("click", () => pullCommunityPreset(e));
+    card.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        pullCommunityPreset(e);
+      }
+    });
     container.appendChild(card);
   });
 }
@@ -1809,7 +1999,7 @@ window.addEventListener("DOMContentLoaded", () => {
   initWasmEngine().then((ready) => {
     if (ready) {
       const badge = document.getElementById("wasmBadge");
-      if (badge) badge.style.display = "inline-flex";
+      if (badge) badge.classList.add("active");
     }
   });
 
@@ -1846,11 +2036,18 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Preset clicks
+  // Preset clicks & keyboard activation
   document.querySelectorAll(".preset-card").forEach((card) => {
-    card.addEventListener("click", () => {
+    const activatePreset = () => {
       selectPreset(card.getAttribute("data-preset"));
       resetMacroControls(currentPreset.bands);
+    };
+    card.addEventListener("click", activatePreset);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        activatePreset();
+      }
     });
   });
 
@@ -1960,7 +2157,13 @@ window.addEventListener("DOMContentLoaded", () => {
   // Load Preset File (.json)
   const fileInput = document.getElementById("fileInputPreset");
   document.getElementById("btnLoadPreset")?.addEventListener("click", () => fileInput?.click());
-  document.getElementById("lblLoadPreset")?.addEventListener("click", () => fileInput?.click());
+  const lblLoadPreset = document.getElementById("lblLoadPreset");
+  lblLoadPreset?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fileInput?.click();
+    }
+  });
   fileInput?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2077,6 +2280,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (isDemoMode) {
       updateDeviceBadge("connected", "Virtual KT02H20 (Demo Simulation)");
       updateFlashCounterBadge(null);
+      updateEqCapsBadge();
       document.getElementById("btnApply").disabled = false;
       document.getElementById("btnReadDac").disabled = false;
       document.getElementById("btnFlash").disabled = false;
@@ -2084,9 +2288,12 @@ window.addEventListener("DOMContentLoaded", () => {
     } else if (!connectedHidDevice) {
       updateDeviceBadge("disconnected", "No DAC Connected");
       updateFlashCounterBadge(null);
+      updateEqCapsBadge();
       document.getElementById("btnApply").disabled = true;
       document.getElementById("btnReadDac").disabled = true;
       document.getElementById("btnFlash").disabled = true;
+    } else {
+      updateEqCapsBadge(connectedHidDevice);
     }
   });
 
@@ -2121,175 +2328,22 @@ window.addEventListener("DOMContentLoaded", () => {
   if (btnNormalizeHeadroom) {
     btnNormalizeHeadroom.addEventListener("click", () => {
       currentPreset.bands = normalizeHeadroom(currentPreset.bands, 0.0);
-      populateControls();
+      buildControlsUI();
       renderCurve();
       triggerAutoApply();
       showToast("Headroom normalized: Positive boosts attenuated to 0 dBFS.");
     });
   }
 
-  // ── Web Audio Tone Generator & Resonance Sweep Tool ─────────────────────
-  let toneCtx = null;
-  let toneOsc = null;
-  let toneGain = null;
-  let noiseNode = null;
-  let isToneActive = false;
-  let isNoiseActive = false;
-  let sweepInterval = null;
-
-  function initToneAudio() {
-    if (!toneCtx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      toneCtx = new AudioCtx();
-    }
-    if (toneCtx.state === "suspended") {
-      toneCtx.resume();
-    }
-  }
-
-  function startTone(freq = 7000) {
-    initToneAudio();
-    stopAudioGenerators();
-
-    toneOsc = toneCtx.createOscillator();
-    toneGain = toneCtx.createGain();
-
-    toneOsc.type = "sine";
-    toneOsc.frequency.setValueAtTime(freq, toneCtx.currentTime);
-
-    const sliderVol = document.getElementById("sliderToneVol");
-    const vol = sliderVol ? parseFloat(sliderVol.value) || 0.03 : 0.03;
-    toneGain.gain.setValueAtTime(0.0001, toneCtx.currentTime);
-    toneGain.gain.exponentialRampToValueAtTime(vol, toneCtx.currentTime + 0.04);
-
-    toneOsc.connect(toneGain);
-    toneGain.connect(toneCtx.destination);
-
-    toneOsc.start();
-    isToneActive = true;
-
-    const btnPlay = document.getElementById("btnTonePlay");
-    if (btnPlay) {
-      btnPlay.textContent = "⏹ Stop Sine";
-      btnPlay.classList.add("active");
-    }
-  }
-
-  function startPinkNoise() {
-    initToneAudio();
-    stopAudioGenerators();
-
-    // Generate 5 seconds of looped Paul Kellet pink noise buffer
-    const bufferSize = toneCtx.sampleRate * 5;
-    const noiseBuffer = toneCtx.createBuffer(1, bufferSize, toneCtx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.075;
-      b6 = white * 0.115926;
-    }
-
-    noiseNode = toneCtx.createBufferSource();
-    noiseNode.buffer = noiseBuffer;
-    noiseNode.loop = true;
-
-    toneGain = toneCtx.createGain();
-    const sliderVol = document.getElementById("sliderToneVol");
-    const vol = sliderVol ? parseFloat(sliderVol.value) || 0.03 : 0.03;
-    toneGain.gain.setValueAtTime(0.0001, toneCtx.currentTime);
-    toneGain.gain.exponentialRampToValueAtTime(vol * 1.2, toneCtx.currentTime + 0.05);
-
-    noiseNode.connect(toneGain);
-    toneGain.connect(toneCtx.destination);
-    noiseNode.start();
-    isNoiseActive = true;
-
-    const btnNoise = document.getElementById("btnPinkNoise");
-    if (btnNoise) {
-      btnNoise.textContent = "⏹ Stop Noise";
-      btnNoise.classList.add("active");
-    }
-  }
-
-  function stopAudioGenerators() {
-    if (sweepInterval) {
-      clearInterval(sweepInterval);
-      sweepInterval = null;
-      const btnSweep = document.getElementById("btnToneSweep");
-      if (btnSweep) {
-        btnSweep.textContent = "🔄 Sweep (4k-10k)";
-        btnSweep.classList.remove("active");
-      }
-    }
-
-    if (toneGain && toneCtx) {
-      try {
-        toneGain.gain.linearRampToValueAtTime(0.0001, toneCtx.currentTime + 0.03);
-      } catch (e) {}
-    }
-
-    if (toneOsc) {
-      try {
-        setTimeout(() => {
-          try {
-            toneOsc?.stop();
-            toneOsc?.disconnect();
-          } catch (e) {}
-          toneOsc = null;
-        }, 35);
-      } catch (err) {
-        try { toneOsc.stop(); } catch (e) {}
-        toneOsc = null;
-      }
-    }
-
-    if (noiseNode) {
-      try {
-        setTimeout(() => {
-          try {
-            noiseNode?.stop();
-            noiseNode?.disconnect();
-          } catch (e) {}
-          noiseNode = null;
-        }, 35);
-      } catch (err) {
-        try { noiseNode.stop(); } catch (e) {}
-        noiseNode = null;
-      }
-    }
-
-    isToneActive = false;
-    isNoiseActive = false;
-
-    const btnPlay = document.getElementById("btnTonePlay");
-    if (btnPlay) {
-      btnPlay.textContent = "▶ Sine Tone";
-      btnPlay.classList.remove("active");
-    }
-
-    const btnNoise = document.getElementById("btnPinkNoise");
-    if (btnNoise) {
-      btnNoise.textContent = "📻 Pink Noise";
-      btnNoise.classList.remove("active");
-    }
-  }
-
+  // ── Web Audio Tone Generator & Resonance Sweep Tool Handlers ────────────
   const sliderToneFreq = document.getElementById("sliderToneFreq");
   const lblToneFreq = document.getElementById("lblToneFreq");
   if (sliderToneFreq) {
     sliderToneFreq.addEventListener("input", (e) => {
       const f = parseFloat(e.target.value);
       if (lblToneFreq) lblToneFreq.textContent = `${Math.round(f)} Hz`;
-      if (toneOsc && toneCtx && isToneActive) {
-        toneOsc.frequency.setValueAtTime(f, toneCtx.currentTime);
+      if (toneOsc && audioCtx && isToneActive) {
+        toneOsc.frequency.setValueAtTime(f, audioCtx.currentTime);
       }
     });
   }
@@ -2301,8 +2355,8 @@ window.addEventListener("DOMContentLoaded", () => {
       const v = parseFloat(e.target.value);
       const db = 20 * Math.log10(v);
       if (lblToneVol) lblToneVol.textContent = `${db.toFixed(0)} dB`;
-      if (toneGain && toneCtx && (isToneActive || isNoiseActive)) {
-        toneGain.gain.setValueAtTime(isNoiseActive ? v * 1.2 : v, toneCtx.currentTime);
+      if (masterVolGainNode && audioCtx && (isToneActive || isPlayingNoise)) {
+        masterVolGainNode.gain.setValueAtTime(isPlayingNoise ? v * 1.2 : v, audioCtx.currentTime);
       }
     });
   }
@@ -2317,11 +2371,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("btnPinkNoise")?.addEventListener("click", () => {
-    if (isNoiseActive) {
-      stopAudioGenerators();
-    } else {
-      startPinkNoise();
-    }
+    toggleTestNoise();
   });
 
   document.getElementById("btnToneSweep")?.addEventListener("click", () => {
@@ -2347,8 +2397,8 @@ window.addEventListener("DOMContentLoaded", () => {
       }
       if (sliderToneFreq) sliderToneFreq.value = Math.round(currentSweepFreq);
       if (lblToneFreq) lblToneFreq.textContent = `${Math.round(currentSweepFreq)} Hz`;
-      if (toneOsc && toneCtx && isToneActive) {
-        toneOsc.frequency.setValueAtTime(currentSweepFreq, toneCtx.currentTime);
+      if (toneOsc && audioCtx && isToneActive) {
+        toneOsc.frequency.setValueAtTime(currentSweepFreq, audioCtx.currentTime);
       }
     }, 50);
   });
@@ -2384,7 +2434,7 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     currentPreset.bands[closestIdx].freq = Math.round(currentFreq);
-    populateControls();
+    buildControlsUI();
     renderCurve();
     triggerAutoApply();
     showToast(`Band ${closestIdx + 1} snapped to ${Math.round(currentFreq)} Hz`);

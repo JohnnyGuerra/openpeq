@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dac-peq-manager | Hardware DSP Flasher &amp; Host PEQ Suite</title>
   <meta name="description" content="Open-source WebHID flasher for KTMicro KT02H20 / WalkPlay USB DACs (Kiwi Ears Allegro Mini, BASN BmasterX 6) and Host DSP generator for JCALLY JM6 Pro (Conexant CX31993).">
-  <link rel="stylesheet" href="styles.css?v=2">
-  <script type="module" src="app.js?v=20261022_6"></script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d2ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 10v3'/%3E%3Cpath d='M6 6v11'/%3E%3Cpath d='M10 3v18'/%3E%3Cpath d='M14 8v7'/%3E%3Cpath d='M18 5v13'/%3E%3Cpath d='M22 10v3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css?v=3">
+  <script type="module" src="app.js?v=20261030_1"></script>
 </head>
 <body>
   <div class="container">
@@ -30,7 +31,7 @@
       </div>
 
       <div class="device-bar">
-        <span id="wasmBadge" class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; font-size: 0.75rem; font-family: var(--font-mono); display: none; align-items: center; gap: 4px;" title="Rust WebAssembly DSP Core Active">
+        <span id="wasmBadge" class="badge wasm-badge" title="Rust WebAssembly DSP Core Status">
           <span>⚡ Rust WASM</span>
         </span>
         <div id="deviceBadge" class="badge disconnected">
@@ -49,7 +50,7 @@
           Burns: <span id="lblFlashCount" style="color: var(--accent-yellow); font-weight: 700;">0</span>
         </span>
         <button id="btnConnect" class="btn btn-primary" title="Request WebHID access to USB Audio DSP">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
             <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
             <line x1="6" y1="6" x2="6.01" y2="6"/>
@@ -60,9 +61,10 @@
       </div>
     </header>
 
+    <main id="main-content">
     <!-- Mobile Android WebHID Advisory Banner -->
     <div id="mobileWebHidBanner" class="safety-alert" style="background: rgba(56, 189, 248, 0.12); border-color: var(--accent-cyan); color: #bae6fd;" role="region" aria-label="Mobile Browser Advisory">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;" aria-hidden="true">
         <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
         <line x1="12" y1="18" x2="12.01" y2="18"/>
       </svg>
@@ -79,7 +81,7 @@
 
     <!-- Conexant Hardware Safety Alert Banner -->
     <div id="safetyAlert" class="safety-alert" role="alert">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;" aria-hidden="true">
         <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
         <line x1="12" y1="9" x2="12" y2="13"/>
         <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -92,9 +94,9 @@
 
     <!-- Acoustic Target Presets -->
     <section class="presets-section">
-      <div class="section-title">Acoustic Target Presets</div>
+      <h2 class="section-title">Acoustic Target Presets</h2>
       <div class="preset-cards">
-        <div class="preset-card active" data-preset="bmasterx6">
+        <div class="preset-card active" data-preset="bmasterx6" tabindex="0" role="button" aria-pressed="true">
           <h3>
             <span>BASN BmasterX 6</span>
             <span class="tag">1DD+3BA+2PZT</span>
@@ -102,7 +104,7 @@
           <p>Tighten 8mm mid-bass warmth, pull vocals forward, tame 9.8kHz ceramic peak.</p>
         </div>
 
-        <div class="preset-card" data-preset="ew300-silver">
+        <div class="preset-card" data-preset="ew300-silver" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>SIMGOT EW300 (Silver)</span>
             <span class="tag">Steel Nozzle</span>
@@ -110,7 +112,7 @@
           <p>Simgot-Golden2023 target: Sub-bass punch and smoothed upper-mid/PZT energy.</p>
         </div>
 
-        <div class="preset-card" data-preset="ew300-gold">
+        <div class="preset-card" data-preset="ew300-gold" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>SIMGOT EW300 (Gold)</span>
             <span class="tag">Copper Nozzle</span>
@@ -118,7 +120,7 @@
           <p>H-2019 target: De-mud lower mids and restore top-end air and micro-detail.</p>
         </div>
 
-        <div class="preset-card" data-preset="flat">
+        <div class="preset-card" data-preset="flat" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>Flat Bypass</span>
             <span class="tag">0 dB Reset</span>
@@ -126,15 +128,15 @@
           <p>Hardware bypass reset: Sets all 5 bands to 1000 Hz 0 dB gain with 0 dB preamp.</p>
         </div>
 
-        <div class="preset-card" data-preset="jm-1">
+        <div class="preset-card" data-preset="jm-1" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>JM-1 Target</span>
-            <span class="tag" style="color: var(--accent-purple);">Modern Target</span>
+            <span class="tag" style="color: #d8b4fe;">Modern Target</span>
           </h3>
           <p>Jaytiss human impedance target: Deep sub-bass with smooth, non-fatiguing 3kHz ear gain.</p>
         </div>
 
-        <div class="preset-card" data-preset="ief-neutral">
+        <div class="preset-card" data-preset="ief-neutral" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>IEF Neutral</span>
             <span class="tag" style="color: var(--accent-green);">Studio Flat</span>
@@ -142,7 +144,7 @@
           <p>Crinacle target: Linear unboosted bass with relaxed studio monitor pinna balance.</p>
         </div>
 
-        <div class="preset-card" data-preset="harman-2019v2">
+        <div class="preset-card" data-preset="harman-2019v2" tabindex="0" role="button" aria-pressed="false">
           <h3>
             <span>Harman In-Ear</span>
             <span class="tag" style="color: var(--accent-yellow);">2019 v2</span>
@@ -154,10 +156,10 @@
 
     <!-- Community Measurement Database (8,800+ AutoEq & Squiglink Profiles) -->
     <section class="db-section">
-      <div class="section-title">Community Measurement Database (8,800+ AutoEq &amp; Squiglink Profiles)</div>
+      <h2 class="section-title">Community Measurement Database (8,800+ AutoEq &amp; Squiglink Profiles)</h2>
       <div class="db-search-bar">
-        <input type="text" id="dbSearchInput" class="db-search-input" placeholder="Search 8,800+ models (e.g. EW300, HD 600, Aria, Blessing, Chu, Zero)...">
-        <select id="dbSourceFilter" class="db-source-select">
+        <input type="text" id="dbSearchInput" class="db-search-input" aria-label="Search 8,800+ IEM and Headphone Models" placeholder="Search 8,800+ models (e.g. EW300, HD 600, Aria, Blessing, Chu, Zero)...">
+        <select id="dbSourceFilter" class="db-source-select" aria-label="Filter measurements by source">
           <option value="">All Sources (Crinacle, Oratory, Super Review, etc.)</option>
           <option value="crinacle">crinacle (711 &amp; 5128)</option>
           <option value="oratory1990">oratory1990 (GRAS 43AG-7)</option>
@@ -182,14 +184,14 @@
         <button type="button" class="quick-tag" data-query="Tangzu Wan'er">Tangzu Wan'er</button>
       </div>
 
-      <div id="dbResultsList" class="db-results-container" style="display: none;">
+      <div id="dbResultsList" class="db-results-container" style="display: none;" role="region" aria-label="Database Search Results">
         <!-- Dynamically populated by app.js -->
       </div>
     </section>
 
     <!-- Acoustic Coupler Artifact Advisory Banner -->
     <div id="acousticAlert" class="safety-alert" style="background: rgba(245, 158, 11, 0.12); border-color: var(--accent-yellow); color: #fde68a;" role="alert">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;" aria-hidden="true">
         <circle cx="12" cy="12" r="10"/>
         <line x1="12" y1="8" x2="12" y2="12"/>
         <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -210,47 +212,47 @@
     <section class="graph-container">
       <div class="graph-header">
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-          <div class="section-title" style="margin-bottom: 0;">Frequency Response (20 Hz &ndash; 20 kHz)</div>
+          <h2 class="section-title" style="margin-bottom: 0;">Frequency Response (20 Hz &ndash; 20 kHz)</h2>
           <div id="targetLegend" class="target-legend" style="display: none;">
             <span style="display: inline-block; width: 14px; height: 0; border-top: 2px dashed var(--accent-purple);"></span>
-            <span id="lblTargetName" style="color: var(--accent-purple); font-weight: 600;">Target Curve</span>
+            <span id="lblTargetName" style="color: #d8b4fe; font-weight: 600;">Target Curve</span>
             <span id="lblTargetRms" style="color: var(--accent-yellow); font-family: var(--font-mono); font-size: 0.72rem;">(RMS: ±0.0 dB)</span>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
           <!-- Target & Preference Bounds Selector -->
           <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; background: var(--bg-card); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);">
-            <span style="color: var(--text-muted);">Target:</span>
-            <select id="selTargetCurve" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);">
+            <label for="selTargetCurve" style="color: var(--text-muted);">Target:</label>
+            <select id="selTargetCurve" aria-label="Target Reference Curve" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);">
               <option value="none">None (Off)</option>
               <option value="harman-2019v2">Harman In-Ear 2019v2</option>
               <option value="jm-1">JM-1 Modern Target</option>
               <option value="ief-neutral">IEF Neutral (Crinacle)</option>
             </select>
-            <span style="color: var(--text-muted); margin-left: 0.3rem;">Bounds:</span>
-            <select id="selPreferenceTolerance" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
+            <label for="selPreferenceTolerance" style="color: var(--text-muted); margin-left: 0.3rem;">Bounds:</label>
+            <select id="selPreferenceTolerance" aria-label="Preference Tolerance Bounds" style="width: auto; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
               <option value="1.5">±1.5 dB</option>
               <option value="2.0" selected>±2.0 dB</option>
               <option value="3.0">±3.0 dB</option>
             </select>
           </div>
-          <button id="btnNormalizeHeadroom" class="quick-tag" style="display: none; padding: 0.15rem 0.5rem; font-size: 0.72rem; color: var(--accent-yellow); border-color: var(--accent-yellow);" title="Normalize positive gains to 0 dBFS to prevent DAC clipping">⚠️ Normalize Headroom</button>
+          <button id="btnNormalizeHeadroom" class="quick-tag" style="display: inline-flex; padding: 0.15rem 0.5rem; font-size: 0.72rem; color: var(--accent-yellow); border-color: var(--accent-yellow);" title="Normalize positive gains to 0 dBFS to prevent DAC clipping">⚠️ Peak +2.2 dB (Normalize)</button>
           <label id="lblToggleTarget" class="checkbox-label" style="display: none; font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--bg-card); border-radius: 4px;" title="Toggle original target reference curve & preference envelope">
             <input type="checkbox" id="chkShowTarget" checked>
             <span>Overlay Target</span>
           </label>
-          <div id="graphStats" class="graph-stats">Loading EQ curve...</div>
+          <div id="graphStats" class="graph-stats">Preamp: -2.5 dB | <span style="color: var(--accent-green); font-weight: 600;">Peak: -0.9 dBFS</span> | RBJ 48/96kHz</div>
         </div>
       </div>
       <div class="svg-wrapper">
-        <svg id="eqSvg" preserveAspectRatio="none" role="img" aria-label="Parametric EQ Frequency Response Curve"></svg>
+        <svg id="eqSvg" preserveAspectRatio="none" role="group" aria-label="Interactive Parametric EQ Frequency Response Graph (Use Tab and Arrow keys on band markers to tune)"></svg>
       </div>
 
       <!-- Ear Canal Resonance Finder & Web Audio Tone Generator -->
       <div class="tone-generator-panel">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-            <span style="font-weight: 600; font-size: 0.85rem; color: var(--accent-cyan);">🔊 Resonance & Tonal Generator</span>
+            <span style="font-weight: 600; font-size: 0.85rem; color: var(--accent-cyan);">🔊 Resonance &amp; Tonal Generator</span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Audition pure sine sweep or pink noise through your DAC</span>
             <button id="btnOpenToneGuide" class="quick-tag" style="padding: 0.15rem 0.45rem; font-size: 0.7rem; color: var(--accent-cyan); border-color: rgba(56, 189, 248, 0.4);" title="Open step-by-step user guide for Sine Sweep and Pink Noise">❓ How to Use</button>
           </div>
@@ -258,20 +260,20 @@
             <div style="display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.1rem;">
               <button id="btnTonePlay" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;">▶ Sine Tone</button>
               <button id="btnToneSweep" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;">🔄 Sweep (4k-10k)</button>
-              <button id="btnPinkNoise" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Audition full-spectrum pink noise to verify overall acoustic balance">📻 Pink Noise</button>
+              <button id="btnPinkNoise" class="quick-tag" style="padding: 0.2rem 0.55rem; font-size: 0.74rem; border: none; margin: 0;" title="Audition full-spectrum pink noise through the active PEQ filter chain">📻 Pink Noise</button>
             </div>
             <button id="btnSnapBand" class="quick-tag" style="padding: 0.2rem 0.6rem; font-size: 0.74rem;" title="Snap closest active PEQ band to current frequency">🎯 Snap Band</button>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.4rem; flex-wrap: wrap;">
           <div id="freqControlRow" style="flex: 1; min-width: 220px; display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 35px;">Freq:</span>
-            <input type="range" id="sliderToneFreq" min="20" max="20000" step="1" value="7000" style="flex: 1;">
+            <label for="sliderToneFreq" style="font-size: 0.75rem; color: var(--text-muted); min-width: 35px;">Freq:</label>
+            <input type="range" id="sliderToneFreq" aria-label="Sine Tone Frequency (Hz)" min="20" max="20000" step="1" value="7000" style="flex: 1;">
             <span id="lblToneFreq" style="font-family: var(--font-mono); font-size: 0.78rem; min-width: 60px; text-align: right; color: var(--accent-cyan);">7000 Hz</span>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 0.75rem; color: var(--text-muted);">Volume:</span>
-            <input type="range" id="sliderToneVol" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning (keep low)">
+            <label for="sliderToneVol" style="font-size: 0.75rem; color: var(--text-muted);">Volume:</label>
+            <input type="range" id="sliderToneVol" aria-label="Tone Generator Safe Volume" min="0.005" max="0.15" step="0.005" value="0.03" style="width: 75px;" title="Safe volume level for IEM auditioning (keep low)">
             <span id="lblToneVol" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 45px; color: var(--text-muted);">-30 dB</span>
           </div>
         </div>
@@ -310,7 +312,7 @@
           <li><strong>Step A:</strong> Click <strong>📻 Pink Noise</strong> after tweaking your PEQ curve.</li>
           <li><strong>Step B:</strong> It should sound like a continuous, smooth, soothing waterfall.</li>
           <li><strong>Step C:</strong> If you hear a harsh whistle or hissing peak, your treble has an uncorrected spike. If it sounds hollow or thin, check your 250 Hz &ndash; 500 Hz lower mids.</li>
-          <li><strong>Step D:</strong> Click <strong>🎧 Audition in RAM</strong> to toggle and verify before burning to hardware NVRAM.</li>
+          <li><strong>Step D:</strong> Click <strong>▶ Apply (Live DSP RAM)</strong> to audition on your connected DAC before burning to hardware NVRAM.</li>
         </ul>
       </div>
 
@@ -323,14 +325,14 @@
     <section>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-          <div id="lblMatrixTitle" class="section-title" style="margin-bottom: 0;">5-Band Biquad Filter Matrix</div>
+          <h2 id="lblMatrixTitle" class="section-title" style="margin-bottom: 0;">5-Band Biquad Filter Matrix</h2>
           <span id="eqCapsBadge" class="eqcaps-badge" title="Declarative hardware DSP capabilities & register guardrails">
             5 Bands | Step 0.1 dB | Reg 0x11/0x66 Guarded
           </span>
         </div>
         <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem;">
-          <span style="color: var(--text-muted);">DSP Architecture:</span>
-          <select id="selHardwareBandCount" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;" title="Select hardware biquad band count">
+          <label for="selHardwareBandCount" style="color: var(--text-muted);">DSP Architecture:</label>
+          <select id="selHardwareBandCount" aria-label="DSP Hardware Band Architecture" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;" title="Select hardware biquad band count">
             <option value="5" selected>5-Band (KTMicro KT02H20 / Allegro Mini / JA11)</option>
             <option value="8">8-Band (CrinEar Protocol Micro / WalkPlay)</option>
             <option value="9">9-Band (Moondrop FreeDSP / May)</option>
@@ -351,24 +353,24 @@
         <div class="macro-sliders-grid">
           <div class="macro-slider-box">
             <div class="control-label" style="font-size: 0.76rem;">
-              <span>Sub-Bass Shelf</span>
+              <label for="sliderMacroBass">Sub-Bass Shelf</label>
               <span id="lblMacroBass" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
             </div>
-            <input type="range" id="sliderMacroBass" min="-6" max="6" step="0.5" value="0">
+            <input type="range" id="sliderMacroBass" aria-label="Sub-Bass Shelf Macro Offset" min="-6" max="6" step="0.5" value="0">
           </div>
           <div class="macro-slider-box">
             <div class="control-label" style="font-size: 0.76rem;">
-              <span>Ear Gain (3 kHz Pinna)</span>
+              <label for="sliderMacroEar">Ear Gain (3 kHz Pinna)</label>
               <span id="lblMacroEar" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
             </div>
-            <input type="range" id="sliderMacroEar" min="-4" max="4" step="0.5" value="0">
+            <input type="range" id="sliderMacroEar" aria-label="Ear Gain 3 kHz Pinna Macro Offset" min="-4" max="4" step="0.5" value="0">
           </div>
           <div class="macro-slider-box">
             <div class="control-label" style="font-size: 0.76rem;">
-              <span>Treble Air (&ge; 8 kHz)</span>
+              <label for="sliderMacroTreble">Treble Air (&ge; 8 kHz)</label>
               <span id="lblMacroTreble" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
             </div>
-            <input type="range" id="sliderMacroTreble" min="-6" max="6" step="0.5" value="0">
+            <input type="range" id="sliderMacroTreble" aria-label="Treble Air Macro Offset" min="-6" max="6" step="0.5" value="0">
           </div>
         </div>
       </div>
@@ -379,17 +381,20 @@
     </section>
 
     <!-- Global Extras & Hardware Action Panel -->
-    <section class="extras-panel">
+    <section class="extras-panel" aria-label="Global Preamp, Hardware Registers, and Flash Actions">
       <!-- Preamp -->
       <div class="extra-group">
         <div class="control-label">
-          <span>Global Preamp</span>
+          <label for="sliderPreamp" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <span>Global Preamp</span>
+            <span id="lblPreampGuard" class="guard-pill" style="display: none;" title="Kiwi Ears Allegro Mini (0x31B2) uses unity hardware gain; preamp applies to WebAudio & Host exports">Host/WebAudio Only</span>
+          </label>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span id="lblPreamp" style="font-weight: 700; color: var(--accent-cyan);">-2.5 dB</span>
             <button id="btnAutoPreamp" class="quick-tag" style="padding: 0.15rem 0.5rem; font-size: 0.72rem;" title="Auto-calculate preamp with 0.5 dB intersample headroom">Auto Headroom</button>
           </div>
         </div>
-        <input type="range" id="sliderPreamp" min="-12" max="12" step="0.5" value="-2.5">
+        <input type="range" id="sliderPreamp" aria-label="Global Preamp (dB)" min="-12" max="12" step="0.5" value="-2.5">
       </div>
 
       <!-- Hardware Slot & DAC Reconstruction Filter -->
@@ -408,7 +413,8 @@
           </div>
           <div>
             <label for="selDacFilter" class="control-label">
-              <span>DAC Reconstruction Filter</span>
+              <span>DAC Filter (0x11)</span>
+              <span id="lblDacFilterGuard" class="guard-pill" title="Register 0x11 is a FiiO JA11 feature and is guarded on generic KT02H20 / Allegro Mini to prevent volume lockout">JA11 Only</span>
             </label>
             <select id="selDacFilter">
               <option value="1" selected>FAST-LL (Fast Roll-Off, Low Latency)</option>
@@ -433,76 +439,83 @@
         </label>
       </div>
 
-      <!-- Apply & Flash Buttons -->
-      <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
-        <button id="btnApply" class="btn btn-primary" disabled title="Write parameters to KT02H20 live DSP RAM (Instant Audition)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          Apply (Live DSP RAM)
-        </button>
-        <button id="btnReadDac" class="btn btn-secondary" disabled title="Read active hardware PEQ registers from connected DAC into editor">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Read from DAC
-        </button>
-        <button id="btnSavePreset" class="btn btn-secondary" title="Save current editor profile or hardware readback as a backup preset file (.json)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-          </svg>
-          Save Backup JSON
-        </button>
-        <button id="btnShareUrl" class="btn btn-secondary" title="Copy a one-click shareable URL link for the active PEQ curve">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-          </svg>
-          Share EQ Link
-        </button>
-        <label for="fileInputPreset" id="lblLoadPreset" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin: 0;" title="Load preset from JSON, GraphWorks export, Equalizer APO, or CSV">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Import / Load Preset
-        </label>
-        <input type="file" id="fileInputPreset" accept=".json,.txt,.csv,text/plain,application/json" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;" />
-        <button id="btnRestoreStock" class="btn btn-secondary" style="display: none;" title="Restore original hardware factory backup saved for this DAC">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="1 4 1 10 7 10"/>
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-          </svg>
-          Restore Stock Backup
-        </button>
-        <button id="btnClearFlash" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Hardware Factory Reset: Sends 0x43 CLEAR command to erase NVRAM and restore out-of-the-box factory state">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6h18"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-          Factory Reset (Clear Flash)
-        </button>
-        <button id="btnFlash" class="btn btn-burn" disabled title="Burn parameters directly into onboard hardware flash NVRAM (Persists across power off and host swap)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-          Burn to NVRAM Flash
-        </button>
+      <!-- 2-Tier Action Bar: Hardware DSP Transport vs. Preset Utilities -->
+      <div class="actions-toolbar">
+        <div class="action-tier" role="group" aria-label="Hardware DSP Transport Actions">
+          <span class="action-tier-label">Hardware DSP:</span>
+          <button id="btnApply" class="btn btn-primary" disabled title="Write parameters to KT02H20 live DSP RAM (Instant Audition)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Apply (Live DSP RAM)
+          </button>
+          <button id="btnFlash" class="btn btn-burn" disabled title="Burn parameters directly into onboard hardware flash NVRAM (Persists across power off and host swap)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+            </svg>
+            Burn to NVRAM Flash
+          </button>
+          <button id="btnReadDac" class="btn btn-secondary" disabled title="Read active hardware PEQ registers from connected DAC into editor">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Read from DAC
+          </button>
+          <button id="btnRestoreStock" class="btn btn-secondary" style="display: none;" title="Restore original hardware factory backup saved for this DAC">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Restore Stock Backup
+          </button>
+          <button id="btnClearFlash" class="btn btn-secondary" style="color: #f87171; border-color: rgba(239, 68, 68, 0.45);" title="Hardware Factory Reset: Sends 0x43 CLEAR command to erase NVRAM and restore out-of-the-box factory state">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Factory Reset (Clear Flash)
+          </button>
+        </div>
+
+        <div class="action-tier" role="group" aria-label="Preset and Profile Utilities">
+          <span class="action-tier-label">Profile I/O:</span>
+          <button type="button" id="btnLoadPreset" class="btn btn-secondary" title="Load preset from JSON, GraphWorks export, Equalizer APO, or CSV">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Import / Load Preset
+          </button>
+          <input type="file" id="fileInputPreset" aria-label="Import or Load Preset File" accept=".json,.txt,.csv,text/plain,application/json" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;" />
+          <button id="btnSavePreset" class="btn btn-secondary" title="Save current editor profile or hardware readback as a backup preset file (.json)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save Backup JSON
+          </button>
+          <button id="btnShareUrl" class="btn btn-secondary" title="Copy a one-click shareable URL link for the active PEQ curve">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            Share EQ Link
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- Host DSP Exporters Section -->
     <section class="exporters-section">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div class="section-title" style="margin-bottom: 0;">Host DSP Exporters (JCALLY JM6 Pro / Linux / Android / Windows)</div>
+        <h2 class="section-title" style="margin-bottom: 0;">Host DSP Exporters (JCALLY JM6 Pro / Linux / Android / Windows)</h2>
         <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem;">
-          <span style="color: var(--text-muted);">Export Fidelity:</span>
-          <select id="selExportFidelity" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;">
+          <label for="selExportFidelity" style="color: var(--text-muted);">Export Fidelity:</label>
+          <select id="selExportFidelity" aria-label="Export Fidelity Band Count" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;">
             <option value="hardware" selected>Hardware 5-Band (Matches DAC)</option>
             <option value="full">Full 10-Band (Max Target Fidelity)</option>
           </select>
@@ -514,7 +527,7 @@
 
       <div class="exporters-grid">
         <button id="btnExportPw" class="btn btn-secondary" title="Export native PipeWire filter-chain configuration bound to CX31993">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
@@ -523,7 +536,7 @@
         </button>
 
         <button id="btnExportApo" class="btn btn-secondary" title="Export EqualizerAPO parametric EQ configuration file">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
@@ -532,7 +545,7 @@
         </button>
 
         <button id="btnExportWavelet" class="btn btn-secondary" title="Export 127-point GraphicEQ format for Android Wavelet">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
@@ -541,7 +554,7 @@
         </button>
 
         <button id="btnExportQudelix" class="btn btn-secondary" title="Export 10-band profile for Qudelix-5K Chrome Extension and Mobile App">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
@@ -550,7 +563,7 @@
         </button>
 
         <button id="btnTestNoise" class="btn btn-secondary" title="Play pink noise to test acoustic response">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
@@ -564,7 +577,7 @@
     <section class="dac-directory-section">
       <div class="graph-header" style="margin-bottom: 0.75rem;">
         <div>
-          <div class="section-title" style="margin-bottom: 0.2rem;">Hardware DAC Directory &amp; Compatibility Matrix</div>
+          <h2 class="section-title" style="margin-bottom: 0.2rem;">Hardware DAC Directory &amp; Compatibility Matrix</h2>
           <p style="font-size: 0.8rem; color: var(--text-secondary);">
             Catalog of tested USB-C DAC dongles, internal chipsets, and recommended hardware vs. host DSP workflows.
           </p>
@@ -572,10 +585,10 @@
       </div>
 
       <div class="db-search-bar" style="margin-bottom: 0.75rem;">
-        <input type="text" id="dacSearchInput" class="db-search-input" placeholder="Search DACs (e.g. Allegro Mini, JM6 Pro, CableCreation, JA11, CS43131, Apple)...">
+        <input type="text" id="dacSearchInput" class="db-search-input" aria-label="Search Hardware DAC Directory" placeholder="Search DACs (e.g. Allegro Mini, JM6 Pro, CableCreation, JA11, CS43131, Apple)...">
       </div>
 
-      <div class="dac-filter-pills">
+      <div class="dac-filter-pills" role="group" aria-label="Filter DACs by capability">
         <button class="dac-pill active" data-filter="all">All Devices (<span id="dacCountAll">18</span>)</button>
         <button class="dac-pill" data-filter="flashable">Hardware Flashable (KTMicro)</button>
         <button class="dac-pill" data-filter="blocked">Fixed Mask ROM (CX31993)</button>
@@ -587,6 +600,7 @@
         <!-- Dynamically populated from dacs.json -->
       </div>
     </section>
+    </main>
 
     <!-- Footer & Credits -->
     <footer>

@@ -11,8 +11,8 @@
   --accent-yellow: #f59e0b;
   --accent-red: #ef4444;
   --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   --border-color: #334155;
   --border-focus: #00d2ff;
   --radius-sm: 6px;
@@ -100,6 +100,24 @@ header {
   font-weight: 600;
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-color);
+}
+
+.wasm-badge {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #34d399;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  gap: 4px;
+  opacity: 0.45;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.wasm-badge.active {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #34d399;
+  opacity: 1;
 }
 
 .badge.disconnected {
@@ -230,6 +248,15 @@ header {
 .preset-card:hover {
   border-color: var(--accent-cyan);
   transform: translateY(-2px);
+}
+
+.preset-card:focus-visible,
+.db-result-card:focus-visible,
+.btn:focus-visible,
+.quick-tag:focus-visible,
+.dac-pill:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .preset-card.active {
@@ -442,12 +469,19 @@ svg {
 
 .band-marker {
   cursor: grab;
-  transition: r 0.15s ease;
+  transition: r 0.15s ease, stroke-width 0.15s ease;
 }
 
-.band-marker:hover {
-  r: 8;
+.band-marker:hover,
+.band-node-group:focus-visible .band-marker {
+  r: 8.5;
+  stroke: var(--accent-yellow);
+  stroke-width: 2.5;
   cursor: grab;
+}
+
+.band-node-group:focus {
+  outline: none;
 }
 
 .band-marker:active {
@@ -466,6 +500,7 @@ svg {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+  min-height: 232px;
 }
 
 .band-control {
@@ -520,10 +555,15 @@ svg {
 input[type="range"] {
   width: 100%;
   accent-color: var(--accent-cyan);
-  height: 4px;
-  background: var(--bg-tertiary);
-  border-radius: 2px;
-  outline: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 select {
@@ -539,6 +579,35 @@ select {
 select:focus {
   border-color: var(--border-focus);
 }
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.guard-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.guard-pill.guarded {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fcd34d;
+}
+
+.guard-pill.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
 
 /* Global Extras Panel */
 .extras-panel {
@@ -553,6 +622,32 @@ select:focus {
   align-items: center;
 }
 
+.actions-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.action-tier {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.action-tier-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  min-width: 105px;
+}
+
 .extra-group {
   display: flex;
   flex-direction: column;
@@ -564,6 +659,14 @@ select:focus {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-cyan);
   cursor: pointer;
 }
 
@@ -603,10 +706,11 @@ footer {
 
 footer a {
   color: var(--accent-cyan);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 footer a:hover {
-  text-decoration: underline;
+  color: #7dd3fc;
 }
 
 /* Toast Notification */
@@ -683,11 +787,18 @@ footer a:hover {
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.65rem;
+  min-height: 28px;
   border-radius: 20px;
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.quick-tag.active {
+  background-color: rgba(0, 210, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
 }
 
 .quick-tag:hover {
@@ -774,6 +885,7 @@ footer a:hover {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 0.85rem;
+  min-height: 390px;
   max-height: 400px;
   overflow-y: auto;
   padding-right: 0.25rem;
