@@ -630,3 +630,82 @@ def validate_hardware_bands(target_bands: int, architecture: str) -> Tuple[int, 
         return 9, f"Moondrop FreeDSP hardware supports a maximum of 9 biquads. Target clamped from {target_bands} to 9 bands."
     return target_bands, None
 
+
+def apply_macro_adjustments(
+    bands: Sequence[Dict[str, Any]],
+    bass_db: float = 0.0,
+    ear_gain_db: float = 0.0,
+    treble_db: float = 0.0,
+    min_gain_db: float = -12.0,
+    max_gain_db: float = 12.0,
+) -> List[Dict[str, Any]]:
+    """Apply non-destructive macro target adjustments (Sub-Bass Shelf, 3kHz Ear Gain, Treble Air) to a band list."""
+    if not bands:
+        return []
+
+    out = [dict(b) for b in bands]
+    n = len(out)
+
+    # 1. Identify Bass Band (lowest frequency band <= 200 Hz, or index 0)
+    bass_idx = 0
+    best_bass_freq = float("inf")
+    for i, b in enumerate(out):
+        f = float(b.get("freq", 1000.0))
+        if f < best_bass_freq:
+            best_bass_freq = f
+            bass_idx = i
+
+    # 2. Identify Ear Gain Band (band closest to 2850 Hz that is not bass_idx if n >= 2)
+    ear_idx = 0
+    best_ear_dist = float("inf")
+    for i, b in enumerate(out):
+        if n >= 2 and i == bass_idx:
+            continue
+        f = float(b.get("freq", 1000.0))
+        dist = abs(f - 2850.0)
+        if dist < best_ear_dist:
+            best_ear_dist = dist
+            ear_idx = i
+
+    # 3. Identify Treble Band (highest frequency band that is distinct from bass_idx and ear_idx if n >= 3)
+    treble_idx = n - 1
+    best_treble_freq = -1.0
+    for i, b in enumerate(out):
+        if n >= 3 and i in (bass_idx, ear_idx):
+            continue
+        f = float(b.get("freq", 1000.0))
+        if f >= best_treble_freq:
+            best_treble_freq = f
+            treble_idx = i
+
+    if abs(float(bass_db)) > 1e-6:
+        new_g = float(out[bass_idx].get("gain", 0.0)) + float(bass_db)
+        out[bass_idx]["gain"] = round(max(min_gain_db, min(max_gain_db, new_g)), 2)
+
+    if abs(float(ear_gain_db)) > 1e-6 and n >= 2:
+        new_g = float(out[ear_idx].get("gain", 0.0)) + float(ear_gain_db)
+        out[ear_idx]["gain"] = round(max(min_gain_db, min(max_gain_db, new_g)), 2)
+
+    if abs(float(treble_db)) > 1e-6 and n >= 3:
+        new_g = float(out[treble_idx].get("gain", 0.0)) + float(treble_db)
+        out[treble_idx]["gain"] = round(max(min_gain_db, min(max_gain_db, new_g)), 2)
+
+    return out
+
+
+def smooth_coupler_biquads(bands: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Relax narrow, deep cuts in the 7400-9600 Hz IEC 60318-4 (711) coupler resonance zone."""
+    out: List[Dict[str, Any]] = []
+    for b in bands:
+        copy = dict(b)
+        freq = float(copy.get("freq", 1000.0))
+        gain = float(copy.get("gain", 0.0))
+        q = float(copy.get("q", 1.0))
+
+        if 7400.0 <= freq <= 9600.0 and q > 2.0 and gain <= -3.0:
+            copy["q"] = 1.4
+            copy["gain"] = round(max(-2.0, gain * 0.5), 2)
+        out.append(copy)
+    return out
+
+

@@ -194,8 +194,15 @@
         <line x1="12" y1="8" x2="12" y2="12"/>
         <line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
-      <div id="acousticAlertText">
-        <!-- Dynamically populated if coupler artifacts are detected -->
+      <div style="flex: 1;">
+        <div id="acousticAlertText">
+          <!-- Dynamically populated if coupler artifacts are detected -->
+        </div>
+        <div style="margin-top: 0.45rem;">
+          <button type="button" id="btnSmoothCoupler" class="quick-tag" style="padding: 0.22rem 0.65rem; font-size: 0.76rem; color: #fde68a; border-color: var(--accent-yellow); background: rgba(245, 158, 11, 0.2);" title="Relax narrow 7.4–9.6 kHz coupler resonance cuts to Q=1.4 for natural treble">
+            ✨ Smooth 711 Coupler Spike
+          </button>
+        </div>
       </div>
     </div>
 
@@ -315,7 +322,12 @@
     <!-- Biquad Parameter Controls Matrix -->
     <section>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div id="lblMatrixTitle" class="section-title" style="margin-bottom: 0;">5-Band Biquad Filter Matrix</div>
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+          <div id="lblMatrixTitle" class="section-title" style="margin-bottom: 0;">5-Band Biquad Filter Matrix</div>
+          <span id="eqCapsBadge" class="eqcaps-badge" title="Declarative hardware DSP capabilities & register guardrails">
+            5 Bands | Step 0.1 dB | Reg 0x11/0x66 Guarded
+          </span>
+        </div>
         <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem;">
           <span style="color: var(--text-muted);">DSP Architecture:</span>
           <select id="selHardwareBandCount" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.78rem;" title="Select hardware biquad band count">
@@ -326,6 +338,41 @@
           </select>
         </div>
       </div>
+
+      <!-- Target Customizer Macro Sliders (modernGraphTool style) -->
+      <div class="macro-tweak-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-weight: 600; font-size: 0.82rem; color: var(--accent-cyan);">🎛️ Target Customizer Macros</span>
+            <span style="font-size: 0.73rem; color: var(--text-muted);">Non-destructive tonal tilt &amp; shelf offsets</span>
+          </div>
+          <button type="button" id="btnResetMacros" class="quick-tag" style="padding: 0.12rem 0.5rem; font-size: 0.71rem;" title="Reset macro offsets to 0.0 dB">↺ Reset Macros</button>
+        </div>
+        <div class="macro-sliders-grid">
+          <div class="macro-slider-box">
+            <div class="control-label" style="font-size: 0.76rem;">
+              <span>Sub-Bass Shelf</span>
+              <span id="lblMacroBass" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
+            </div>
+            <input type="range" id="sliderMacroBass" min="-6" max="6" step="0.5" value="0">
+          </div>
+          <div class="macro-slider-box">
+            <div class="control-label" style="font-size: 0.76rem;">
+              <span>Ear Gain (3 kHz Pinna)</span>
+              <span id="lblMacroEar" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
+            </div>
+            <input type="range" id="sliderMacroEar" min="-4" max="4" step="0.5" value="0">
+          </div>
+          <div class="macro-slider-box">
+            <div class="control-label" style="font-size: 0.76rem;">
+              <span>Treble Air (&ge; 8 kHz)</span>
+              <span id="lblMacroTreble" style="font-family: var(--font-mono); color: var(--accent-cyan);">0.0 dB</span>
+            </div>
+            <input type="range" id="sliderMacroTreble" min="-6" max="6" step="0.5" value="0">
+          </div>
+        </div>
+      </div>
+
       <div id="controlsContainer" class="controls-grid">
         <!-- Dynamically populated by app.js -->
       </div>
@@ -409,6 +456,13 @@
             <polyline points="7 3 7 8 15 8"/>
           </svg>
           Save Backup JSON
+        </button>
+        <button id="btnShareUrl" class="btn btn-secondary" title="Copy a one-click shareable URL link for the active PEQ curve">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          Share EQ Link
         </button>
         <label for="fileInputPreset" id="lblLoadPreset" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin: 0;" title="Load preset from JSON, GraphWorks export, Equalizer APO, or CSV">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">

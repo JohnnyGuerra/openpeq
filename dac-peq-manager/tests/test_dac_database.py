@@ -117,3 +117,37 @@ def test_cli_dacs_info():
 
     res_bad = runner.invoke(app, ["dacs", "info", "nonexistent_dac_12345"])
     assert res_bad.exit_code != 0
+
+
+def test_dac_eq_capabilities_schema():
+    """Verify declarative eq_capabilities (eqcaps) and GEMINI.md volume-lockout safety rules."""
+    db = DACDatabase()
+
+    # Allegro Mini (0x31B2:0x0111) -> 5 bands, no_pregain=True, blocks 0x11 and 0x66
+    allegro = db.lookup(0x31B2, 0x0111)
+    assert allegro is not None
+    caps_allegro = allegro.eq_capabilities
+    assert caps_allegro["max_bands"] == 5
+    assert caps_allegro["no_pregain"] is True
+    assert caps_allegro["supports_hardware_preamp"] is False
+    assert "0x11" in caps_allegro["blocked_registers"]
+    assert "0x66" in caps_allegro["blocked_registers"]
+
+    # FiiO JA11 (0x2972:0x0102) -> 5 bands, supports hardware preamp
+    ja11 = db.lookup(0x2972, 0x0102)
+    assert ja11 is not None
+    caps_ja11 = ja11.eq_capabilities
+    assert caps_ja11["max_bands"] == 5
+    assert caps_ja11["supports_hardware_preamp"] is True
+    assert caps_ja11["no_pregain"] is False
+
+    # CrinEar Protocol Micro (0x3302:0xC20F) -> 8 bands WalkPlay
+    micro = db.lookup(0x3302, 0xC20F)
+    assert micro is not None
+    assert micro.eq_capabilities["max_bands"] == 8
+
+    # Moondrop FreeDSP (0x31B2:0x0112) -> 9 bands
+    moondrop = db.lookup(0x31B2, 0x0112)
+    assert moondrop is not None
+    assert moondrop.eq_capabilities["max_bands"] == 9
+

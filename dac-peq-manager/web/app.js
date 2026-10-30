@@ -15,6 +15,8 @@ import {
   normalizeHeadroom,
   lintAcousticBands,
   decimateBands,
+  applyMacroAdjustments,
+  smoothCouplerBiquads,
 } from "./modules/biquad_math.js";
 
 import {
@@ -23,6 +25,8 @@ import {
   formatWaveletGraphicEq,
   formatQudelixJson,
   parseParametricEq,
+  encodePresetToUrlParams,
+  decodePresetFromUrlParams,
 } from "./modules/exporters.js";
 
 import {
@@ -165,6 +169,46 @@ let isRebootingPostCommit = false;
 let autoApplyTimer = null;
 let activeDragIndex = null;
 let activeHardwareBands = 5; // 5 for KTMicro KT02H20, 9 for Moondrop FreeDSP
+let macroState = { bass: 0.0, earGain: 0.0, treble: 0.0 };
+let macroBaselineBands = null;
+
+function resetMacroControls(newBaselineBands = null) {
+  macroState = { bass: 0.0, earGain: 0.0, treble: 0.0 };
+  macroBaselineBands = Array.isArray(newBaselineBands)
+    ? newBaselineBands.map((b) => ({ ...b }))
+    : (currentPreset && Array.isArray(currentPreset.bands) ? currentPreset.bands.map((b) => ({ ...b })) : null);
+  const sBass = document.getElementById("sliderMacroBass");
+  const sEar = document.getElementById("sliderMacroEar");
+  const sTreb = document.getElementById("sliderMacroTreble");
+  const lBass = document.getElementById("lblMacroBass");
+  const lEar = document.getElementById("lblMacroEar");
+  const lTreb = document.getElementById("lblMacroTreble");
+  if (sBass) sBass.value = "0";
+  if (sEar) sEar.value = "0";
+  if (sTreb) sTreb.value = "0";
+  if (lBass) lBass.textContent = "0.0 dB";
+  if (lEar) lEar.textContent = "0.0 dB";
+  if (lTreb) lTreb.textContent = "0.0 dB";
+}
+
+function updateEqCapsBadge(dev = null) {
+  const badge = document.getElementById("eqCapsBadge");
+  if (!badge) return;
+  const activeDev = dev || connectedHidDevice;
+  const isJa11 = activeDev && activeDev.vendorId === 0x2972 && activeDev.productId === 0x0102;
+  const isWalkplay = activeHardwareBands === 8 || activeHardwareBands === 10 || (activeDev && isWalkplayDsp(activeDev));
+  const isMoondrop = activeHardwareBands === 9 || (activeDev && isMoondropFreeDsp(activeDev));
+
+  if (isWalkplay) {
+    badge.textContent = `${activeHardwareBands} Bands (WalkPlay) | Step 0.1 dB | Preamp Supported`;
+  } else if (isMoondrop) {
+    badge.textContent = `9 Bands (Moondrop DSP) | Step 0.1 dB | Preamp Supported`;
+  } else if (isJa11) {
+    badge.textContent = `5 Bands (JA11 KT02H20) | Step 0.1 dB | Reg 0x11/0x66 Supported`;
+  } else {
+    badge.textContent = `5 Bands (KT02H20 Safe Mode) | Step 0.1 dB | Reg 0x11/0x66 Guarded`;
+  }
+}
 
 // ── SVG Curve Renderer ────────────────────────────────────────────────────────
 const FREQ_TICKS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
@@ -290,7 +334,26 @@ function renderCurve() {
       envCurvePath.setAttribute("class", "preference-envelope-path");
       svg.appendChild(envCurvePath);
 
-      // 2. Reference Target Line
+      // 2.Target Difference Fill Shading (modernGraphTool / silicagel.squig.link style)
+      let diffFillD = "";
+      frequencies.forEach((f, i) => {
+        const x = xForFreq(f, width);
+        const yAct = yForDb(responses[i], height);
+        diffFillD += (i === 0 ? "M " : "L ") + x.toFixed(1) + " " + yAct.toFixed(1) + " ";
+      });
+      for (let i = frequencies.length - 1; i >= 0; i--) {
+        const x = xForFreq(frequencies[i], width);
+        const yRef = yForDb(refResponses[i], height);
+        diffFillD += "L " + x.toFixed(1) + " " + yRef.toFixed(1) + " ";
+      }
+      diffFillD += "Z";
+
+      const diffFillPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      diffFillPath.setAttribute("d", diffFillD);
+      diffFillPath.setAttribute("class", "curve-diff-fill");
+      svg.appendChild(diffFillPath);
+
+      // 3. Reference Target Line
       let refPathD = "";
       frequencies.forEach((f, i) => {
         const x = xForFreq(f, width);
@@ -512,6 +575,8 @@ function setHardwareBandArchitecture(bandCount) {
       ? currentPreset.fullBands
       : currentPreset.bands;
   currentPreset.bands = decimateBands(sourceBands, activeHardwareBands);
+  resetMacroControls(currentPreset.bands);
+  updateEqCapsBadge();
   buildControlsUI();
   renderCurve();
 }
@@ -939,6 +1004,78 @@ function exportBackupPreset() {
   const jsonStr = JSON.stringify(out, null, 2);
   downloadFile(`${out.slug}_slot${slotId}.json`, jsonStr, "application/json");
   showToast(`Backup preset saved as ${out.slug}_slot${slotId}.json!`);
+}
+
+async function sharePresetUrl() {
+  try {
+    const queryStr = encodePresetToUrlParams(currentPreset, currentPreset.bands, activeHardwareBands);
+    const shareUrl = `${window.location.origin}${window.location.pathname}?${queryStr}`;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", `?${queryStr}`);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("🔗 Shareable EQ link copied to clipboard!");
+    } else {
+      prompt("Copy your shareable EQ link:", shareUrl);
+    }
+  } catch (err) {
+    console.error("Share URL error:", err);
+    showToast(`Failed to generate share link: ${err.message}`);
+  }
+}
+
+function tryLoadPresetFromUrl() {
+  if (!window.location.search || window.location.search.length <= 1) return false;
+  try {
+    const decoded = decodePresetFromUrlParams(window.location.search);
+    if (decoded && Array.isArray(decoded.bands) && decoded.bands.length > 0) {
+      if (decoded.hw_bands && [5, 8, 9, 10].includes(decoded.hw_bands)) {
+        activeHardwareBands = decoded.hw_bands;
+        const selHwBands = document.getElementById("selHardwareBandCount");
+        if (selHwBands) selHwBands.value = String(activeHardwareBands);
+        const lblTitle = document.getElementById("lblMatrixTitle");
+        if (lblTitle) lblTitle.textContent = `${activeHardwareBands}-Band Biquad Filter Matrix`;
+      }
+      const rawBands = decoded.bands.map((b, i) => ({
+        index: i + 1,
+        type: b.type || "PK",
+        freq: Number(b.freq) || 1000.0,
+        gain: Number(b.gain) || 0.0,
+        q: Number(b.q) || 1.0,
+      }));
+      const finalBands = rawBands.length > activeHardwareBands
+        ? decimateBands(rawBands, activeHardwareBands)
+        : decimateBands(rawBands, activeHardwareBands, false);
+
+      currentPreset = {
+        name: decoded.name || "Shared PEQ Profile",
+        slug: decoded.slug || "shared_peq",
+        description: decoded.description || "Loaded from URL share link",
+        preamp: typeof decoded.preamp === "number" ? decoded.preamp : 0.0,
+        bands: finalBands,
+        fullBands: rawBands.length > activeHardwareBands ? rawBands : null,
+      };
+      if (rawBands.length > activeHardwareBands) {
+        referenceTargetCurve = {
+          name: `${currentPreset.name} (${rawBands.length}-Band Target)`,
+          bands: rawBands,
+          preamp: currentPreset.preamp,
+        };
+        showTargetOverlay = true;
+      } else {
+        referenceTargetCurve = null;
+      }
+      document.querySelectorAll(".preset-card").forEach((c) => c.classList.remove("active"));
+      setTimeout(() => {
+        showToast(`🔗 Loaded shared preset "${currentPreset.name}" (${currentPreset.bands.length} bands)`);
+      }, 150);
+      return true;
+    }
+  } catch (err) {
+    console.warn("URL query did not contain a valid PEQ preset:", err.message);
+  }
+  return false;
 }
 
 function restoreStockBackup() {
@@ -1421,6 +1558,7 @@ async function pullCommunityPreset(entry) {
 
     document.querySelectorAll(".preset-card").forEach((c) => c.classList.remove("active"));
 
+    resetMacroControls(currentPreset.bands);
     buildControlsUI();
     renderCurve();
     triggerAutoApply();
@@ -1680,6 +1818,10 @@ window.addEventListener("DOMContentLoaded", () => {
     if (selSlot) selSlot.value = String(currentPreset.slot_id);
   }
 
+  tryLoadPresetFromUrl();
+  resetMacroControls(currentPreset.bands);
+  updateEqCapsBadge();
+
   buildControlsUI();
   renderCurve();
 
@@ -1708,7 +1850,64 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".preset-card").forEach((card) => {
     card.addEventListener("click", () => {
       selectPreset(card.getAttribute("data-preset"));
+      resetMacroControls(currentPreset.bands);
     });
+  });
+
+  // Target Customizer Macro Sliders & Coupler Smoother
+  function handleMacroSliderInput() {
+    const sBass = document.getElementById("sliderMacroBass");
+    const sEar = document.getElementById("sliderMacroEar");
+    const sTreb = document.getElementById("sliderMacroTreble");
+    const lBass = document.getElementById("lblMacroBass");
+    const lEar = document.getElementById("lblMacroEar");
+    const lTreb = document.getElementById("lblMacroTreble");
+
+    macroState.bass = sBass ? parseFloat(sBass.value) || 0.0 : 0.0;
+    macroState.earGain = sEar ? parseFloat(sEar.value) || 0.0 : 0.0;
+    macroState.treble = sTreb ? parseFloat(sTreb.value) || 0.0 : 0.0;
+
+    if (lBass) lBass.textContent = `${macroState.bass > 0 ? "+" : ""}${macroState.bass.toFixed(1)} dB`;
+    if (lEar) lEar.textContent = `${macroState.earGain > 0 ? "+" : ""}${macroState.earGain.toFixed(1)} dB`;
+    if (lTreb) lTreb.textContent = `${macroState.treble > 0 ? "+" : ""}${macroState.treble.toFixed(1)} dB`;
+
+    if (!macroBaselineBands || macroBaselineBands.length !== currentPreset.bands.length) {
+      macroBaselineBands = currentPreset.bands.map((b) => ({ ...b }));
+    }
+
+    currentPreset.bands = applyMacroAdjustments(
+      macroBaselineBands,
+      macroState.bass,
+      macroState.earGain,
+      macroState.treble
+    );
+    currentPreset.bands.forEach((_, idx) => syncBandControls(idx));
+    renderCurve();
+    triggerAutoApply();
+  }
+
+  document.getElementById("sliderMacroBass")?.addEventListener("input", handleMacroSliderInput);
+  document.getElementById("sliderMacroEar")?.addEventListener("input", handleMacroSliderInput);
+  document.getElementById("sliderMacroTreble")?.addEventListener("input", handleMacroSliderInput);
+
+  document.getElementById("btnResetMacros")?.addEventListener("click", () => {
+    if (macroBaselineBands && macroBaselineBands.length === currentPreset.bands.length) {
+      currentPreset.bands = macroBaselineBands.map((b) => ({ ...b }));
+    }
+    resetMacroControls(currentPreset.bands);
+    currentPreset.bands.forEach((_, idx) => syncBandControls(idx));
+    renderCurve();
+    triggerAutoApply();
+    showToast("Macro offsets reset to 0.0 dB.");
+  });
+
+  document.getElementById("btnSmoothCoupler")?.addEventListener("click", () => {
+    currentPreset.bands = smoothCouplerBiquads(currentPreset.bands);
+    resetMacroControls(currentPreset.bands);
+    currentPreset.bands.forEach((_, idx) => syncBandControls(idx));
+    renderCurve();
+    triggerAutoApply();
+    showToast("✨ Smoothed 711 coupler resonance notch to Q=1.4 for natural treble!");
   });
 
   // Community Database Search
@@ -1753,6 +1952,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnApply")?.addEventListener("click", () => applyToDevice(false));
   document.getElementById("btnReadDac")?.addEventListener("click", () => readFromDevice(false));
   document.getElementById("btnSavePreset")?.addEventListener("click", exportBackupPreset);
+  document.getElementById("btnShareUrl")?.addEventListener("click", sharePresetUrl);
   document.getElementById("btnRestoreStock")?.addEventListener("click", restoreStockBackup);
   document.getElementById("btnClearFlash")?.addEventListener("click", clearDeviceFlash);
   document.getElementById("btnFlash")?.addEventListener("click", () => applyToDevice(true));
@@ -1818,6 +2018,7 @@ window.addEventListener("DOMContentLoaded", () => {
         showToast(`Loaded preset "${currentPreset.name}" (${currentPreset.bands.length} bands)`);
       }
 
+      resetMacroControls(currentPreset.bands);
       buildControlsUI();
       renderCurve();
       triggerAutoApply();

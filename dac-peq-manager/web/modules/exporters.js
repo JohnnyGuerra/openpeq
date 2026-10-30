@@ -352,3 +352,145 @@ export function parseParametricEq(rawText, defaultName = "imported_peq") {
     bands,
   };
 }
+
+/**
+ * Encode a PEQ preset into a deterministic URL query string (compatible with Python encode_preset_to_url_params).
+ */
+export function encodePresetToUrlParams(preset, bands = null, hwBands = 5) {
+  const activeBands = Array.isArray(bands) ? bands : (preset.bands || []);
+  const name = String(preset.name || "Custom PEQ").trim() || "Custom PEQ";
+  const preamp = Math.round((Number(preset.preamp ?? 0.0)) * 10) / 10;
+  const hw = parseInt(hwBands || activeBands.length || 5, 10);
+
+  const typeMap = {
+    PK: "PK", PEAK: "PK", PEAKING: "PK",
+    LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ", LS: "LSQ",
+    HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ", HS: "HSQ",
+  };
+
+  const searchParams = new URLSearchParams();
+  searchParams.append("name", name);
+  searchParams.append("preamp", preamp.toFixed(1));
+  searchParams.append("hw", String(hw));
+
+  activeBands.forEach((b, i) => {
+    const ftype = typeMap[String(b.type || "PK").toUpperCase()] || "PK";
+    const freq = Math.round(Math.max(20.0, Math.min(20000.0, Number(b.freq ?? 1000.0))) * 10) / 10;
+    const gain = Math.round(Math.max(-18.0, Math.min(18.0, Number(b.gain ?? 0.0))) * 100) / 100;
+    const q = Math.round(Math.max(0.1, Math.min(10.0, Number(b.q ?? 1.0))) * 100) / 100;
+    const freqStr = Number.isInteger(freq) ? String(Math.trunc(freq)) : freq.toFixed(1);
+    searchParams.append(`b${i + 1}`, `${ftype},${freqStr},${gain.toFixed(1)},${q.toFixed(2)}`);
+  });
+
+  return searchParams.toString();
+}
+
+/**
+ * Decode a PEQ preset from a dac-peq-manager or squig.link share URL / query string.
+ */
+export function decodePresetFromUrlParams(queryOrUrl, defaultName = "Shared PEQ Profile") {
+  const raw = String(queryOrUrl || "").trim();
+  if (!raw) {
+    throw new Error("Empty URL or query string.");
+  }
+
+  let queryStr = "";
+  if (raw.includes("?")) {
+    queryStr = raw.split("?")[1].split("#")[0];
+  } else if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    queryStr = "";
+  } else {
+    queryStr = raw.replace(/^[?#]+/, "");
+  }
+
+  if (!queryStr) {
+    throw new Error("No query parameters found in URL.");
+  }
+
+  const qs = new URLSearchParams(queryStr);
+  const rawName = qs.get("name") || qs.get("share") || qs.get("preset") || "";
+  const name = rawName.trim() ? rawName.trim() : defaultName;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "shared_peq";
+
+  let preamp = 0.0;
+  if (qs.has("preamp")) {
+    const pVal = parseFloat(qs.get("preamp"));
+    if (!isNaN(pVal)) {
+      preamp = Math.round(Math.max(-18.0, Math.min(18.0, pVal)) * 10) / 10;
+    }
+  }
+
+  let hwBands = 5;
+  if (qs.has("hw")) {
+    const candHw = parseInt(qs.get("hw"), 10);
+    if ([5, 8, 9, 10].includes(candHw)) {
+      hwBands = candHw;
+    }
+  }
+
+  const typeMap = {
+    PK: "PK", PEAK: "PK", PEAKING: "PK",
+    LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ", LS: "LSQ", LSC: "LSQ",
+    HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ", HS: "HSQ", HSC: "HSQ",
+  };
+
+  const bands = [];
+
+  function parseBandTokenString(tokenStr) {
+    const tokens = tokenStr.split(",").map((t) => t.trim()).filter(Boolean);
+    if (tokens.length < 3) return null;
+    let ftype = "PK", freq = NaN, gain = NaN, q = 1.0;
+    const firstUpper = tokens[0].toUpperCase();
+    if (typeMap[firstUpper]) {
+      ftype = typeMap[firstUpper];
+      freq = parseFloat(tokens[1]);
+      gain = parseFloat(tokens[2]);
+      q = tokens.length >= 4 ? parseFloat(tokens[3]) : 1.0;
+    } else {
+      freq = parseFloat(tokens[0]);
+      gain = parseFloat(tokens[1]);
+      q = parseFloat(tokens[2]);
+      ftype = tokens.length >= 4 ? (typeMap[tokens[3].toUpperCase()] || "PK") : "PK";
+    }
+    if (isNaN(freq) || isNaN(gain) || isNaN(q)) return null;
+    return {
+      index: bands.length + 1,
+      type: ftype,
+      freq: Math.round(Math.max(20.0, Math.min(20000.0, freq)) * 10) / 10,
+      gain: Math.round(Math.max(-18.0, Math.min(18.0, gain)) * 100) / 100,
+      q: Math.round(Math.max(0.1, Math.min(10.0, q)) * 100) / 100,
+      enabled: true,
+    };
+  }
+
+  for (let idx = 1; idx <= 20; idx++) {
+    const val = qs.get(`b${idx}`) || qs.get(`f${idx}`);
+    if (!val) continue;
+    const parsedBand = parseBandTokenString(val);
+    if (parsedBand) bands.push(parsedBand);
+  }
+
+  if (bands.length === 0) {
+    const eqRaw = qs.get("eq") || qs.get("filters");
+    if (eqRaw) {
+      eqRaw.split(";").forEach((item) => {
+        const parsedBand = parseBandTokenString(item);
+        if (parsedBand) bands.push(parsedBand);
+      });
+    }
+  }
+
+  if (bands.length === 0) {
+    throw new Error("No valid PEQ bands found in URL parameters.");
+  }
+
+  return {
+    name,
+    slug,
+    description: `Shared via URL (${bands.length} bands)`,
+    preamp,
+    hw_bands: hwBands,
+    bands,
+  };
+}
+

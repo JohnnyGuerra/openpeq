@@ -53,6 +53,85 @@ class DACInfo:
     def is_fixed_mask_rom(self) -> bool:
         return self.dac_type == "fixed_mask_rom" or "mask_rom_safety_lock" in self.quirks
 
+    @property
+    def eq_capabilities(self) -> Dict[str, Any]:
+        """Return declarative hardware EQ capabilities (`eqcaps`) for this device architecture."""
+        return get_architecture_eq_capabilities(
+            self.architecture,
+            hardware_bands=self.hardware_bands,
+            vid=self.vid,
+            pid=self.pid,
+            quirks=self.quirks,
+        )
+
+
+def get_architecture_eq_capabilities(
+    architecture: str,
+    hardware_bands: Optional[int] = None,
+    vid: Optional[int] = None,
+    pid: Optional[int] = None,
+    quirks: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Return modernGraphTool / devicePEQ style declarative EQ capabilities for a DSP architecture."""
+    arch = (architecture or "").lower()
+    quirk_list = quirks or []
+
+    if arch == "ktmicro_dsp":
+        # Strict GEMINI.md Rule 1: Kiwi Ears Allegro Mini (0x31B2:0x0111) blocks 0x11 and 0x66 (noPregain)
+        is_ja11 = (vid == 0x2972 and pid == 0x0102)
+        supports_preamp = bool(is_ja11 and "noPregain" not in quirk_list)
+        blocked_regs = [] if is_ja11 else ["0x11", "0x66"]
+        return {
+            "max_bands": hardware_bands or 5,
+            "gain_range_db": [-12.0, 12.0],
+            "gain_step_db": 0.1,
+            "q_range": [0.1, 10.0],
+            "q_step": 0.05,
+            "supported_filter_types": ["PK", "LSQ", "HSQ"],
+            "supports_hardware_preamp": supports_preamp,
+            "no_pregain": not supports_preamp,
+            "blocked_registers": blocked_regs,
+        }
+
+    if arch == "walkplay_dsp":
+        return {
+            "max_bands": hardware_bands or 8,
+            "gain_range_db": [-12.0, 12.0],
+            "gain_step_db": 0.1,
+            "q_range": [0.1, 10.0],
+            "q_step": 0.05,
+            "supported_filter_types": ["PK", "LSQ", "HSQ"],
+            "supports_hardware_preamp": True,
+            "no_pregain": False,
+            "blocked_registers": [],
+        }
+
+    if arch == "moondrop_dsp":
+        return {
+            "max_bands": hardware_bands or 9,
+            "gain_range_db": [-12.0, 12.0],
+            "gain_step_db": 0.1,
+            "q_range": [0.1, 10.0],
+            "q_step": 0.05,
+            "supported_filter_types": ["PK", "LSQ", "HSQ"],
+            "supports_hardware_preamp": True,
+            "no_pregain": False,
+            "blocked_registers": [],
+        }
+
+    # Host DSP (PipeWire / EqualizerAPO / Wavelet / Fixed Mask ROM)
+    return {
+        "max_bands": hardware_bands or 10,
+        "gain_range_db": [-18.0, 18.0],
+        "gain_step_db": 0.1,
+        "q_range": [0.1, 10.0],
+        "q_step": 0.01,
+        "supported_filter_types": ["PK", "LSQ", "HSQ"],
+        "supports_hardware_preamp": True,
+        "no_pregain": False,
+        "blocked_registers": ["ALL_HID_WRITES"] if arch == "conexant_fixed" else [],
+    }
+
 
 class DACDatabase:
     """Catalog of known USB DAC dongles and DSP architectures."""

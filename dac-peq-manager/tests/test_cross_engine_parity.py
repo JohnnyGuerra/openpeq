@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from dac_peq.biquad import (
+    apply_macro_adjustments,
     calculate_curve_difference,
     calculate_peak_composite_gain,
     calculate_rbj_biquad,
@@ -21,8 +22,13 @@ from dac_peq.biquad import (
     compute_composite_response,
     decimate_bands,
     generate_log_frequencies,
+    smooth_coupler_biquads,
 )
-from dac_peq.exporters import format_wavelet_graphiceq
+from dac_peq.exporters import (
+    decode_preset_from_url_params,
+    encode_preset_to_url_params,
+    format_wavelet_graphiceq,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
@@ -292,6 +298,47 @@ def test_stock_backup_storage_helpers():
     assert res["retrieved"]["bands"][0]["gain"] == 2.5
     assert res["overwriteAttempt"] is False  # Protected against overwriting factory state
     assert res["finalRetrieved"]["preamp"] == -2.0
+
+
+def test_url_codec_and_macro_coupler_parity():
+    """Verify Python and JS parity for URL share encoding/decoding, macro sliders, and coupler smoothing."""
+    test_preset = {
+        "name": "SilicaGel Benchmark",
+        "preamp": -3.2,
+        "bands": [
+            {"index": 1, "type": "LSQ", "freq": 60.0, "gain": 2.5, "q": 0.71},
+            {"index": 2, "type": "PK", "freq": 210.0, "gain": -1.4, "q": 1.25},
+            {"index": 3, "type": "PK", "freq": 2850.0, "gain": 1.8, "q": 1.40},
+            {"index": 4, "type": "PK", "freq": 8000.0, "gain": -4.4, "q": 3.60},
+            {"index": 5, "type": "HSQ", "freq": 10500.0, "gain": 1.2, "q": 0.71},
+        ],
+    }
+
+    py_encoded = encode_preset_to_url_params(test_preset, hw_bands=5)
+    py_decoded = decode_preset_from_url_params(py_encoded)
+    py_macro = apply_macro_adjustments(test_preset["bands"], bass_db=2.0, ear_gain_db=-1.0, treble_db=1.5)
+    py_smoothed = smooth_coupler_biquads(test_preset["bands"])
+
+    js_script = f"""
+    import {{ encodePresetToUrlParams, decodePresetFromUrlParams }} from './modules/exporters.js';
+    import {{ applyMacroAdjustments, smoothCouplerBiquads }} from './modules/biquad_math.js';
+    const preset = {json.dumps(test_preset)};
+    const encoded = encodePresetToUrlParams(preset, null, 5);
+    const decoded = decodePresetFromUrlParams(encoded);
+    const macro = applyMacroAdjustments(preset.bands, 2.0, -1.0, 1.5);
+    const smoothed = smoothCouplerBiquads(preset.bands);
+    console.log(JSON.stringify({{ encoded, decoded, macro, smoothed }}));
+    """
+    js_out = run_node_eval(js_script)
+
+    assert py_encoded == js_out["encoded"]
+    assert py_decoded["name"] == js_out["decoded"]["name"]
+    assert py_decoded["preamp"] == js_out["decoded"]["preamp"]
+    assert py_decoded["hw_bands"] == js_out["decoded"]["hw_bands"]
+    assert py_decoded["bands"] == js_out["decoded"]["bands"]
+    assert py_macro == js_out["macro"]
+    assert py_smoothed == js_out["smoothed"]
+
 
 
 

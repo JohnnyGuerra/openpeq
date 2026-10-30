@@ -322,5 +322,37 @@ def test_headroom_status_and_normalization():
     assert normalized[2]["gain"] == -2.0
 
 
+def test_apply_macro_adjustments_and_smooth_coupler():
+    """Verify non-destructive macro adjustments (Bass, Ear Gain, Treble) and coupler spike smoothing."""
+    from dac_peq.biquad import apply_macro_adjustments, lint_acoustic_bands, smooth_coupler_biquads
+
+    base_bands = [
+        {"type": "LSQ", "freq": 60.0, "gain": 2.0, "q": 0.71},
+        {"type": "PK", "freq": 200.0, "gain": -1.5, "q": 1.20},
+        {"type": "PK", "freq": 2850.0, "gain": 1.5, "q": 1.40},
+        {"type": "PK", "freq": 8100.0, "gain": -4.2, "q": 3.50},
+        {"type": "HSQ", "freq": 10500.0, "gain": 1.0, "q": 0.71},
+    ]
+
+    adjusted = apply_macro_adjustments(base_bands, bass_db=2.5, ear_gain_db=-1.0, treble_db=1.5)
+    # Original unchanged
+    assert base_bands[0]["gain"] == 2.0
+    # Adjusted matches expected offsets
+    assert adjusted[0]["gain"] == 4.5
+    assert adjusted[2]["gain"] == 0.5
+    assert adjusted[4]["gain"] == 2.5
+
+    # Verify coupler spike triggers warning before smoothing and clears after smoothing
+    warnings_before = lint_acoustic_bands(base_bands)
+    assert len(warnings_before) == 1
+    assert "8100 Hz" in warnings_before[0]
+
+    smoothed = smooth_coupler_biquads(base_bands)
+    assert smoothed[3]["q"] == 1.4
+    assert smoothed[3]["gain"] == -2.0
+    assert len(lint_acoustic_bands(smoothed)) == 0
+
+
+
 
 

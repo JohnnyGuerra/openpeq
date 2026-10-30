@@ -332,6 +332,48 @@ svg {
   stroke-dasharray: 4, 3;
 }
 
+.curve-diff-fill {
+  fill: rgba(56, 189, 248, 0.14);
+  stroke: none;
+  pointer-events: none;
+}
+
+.macro-tweak-panel {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.macro-sliders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
+}
+
+.macro-slider-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.eqcaps-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.73rem;
+  font-family: var(--font-mono);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-sm);
+  color: #6ee7b7;
+}
+
 .tone-generator-panel {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(51, 65, 85, 0.6);

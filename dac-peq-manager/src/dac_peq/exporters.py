@@ -762,3 +762,168 @@ def parse_qudelix_profile(raw_input: str | Dict[str, Any]) -> Dict[str, Any]:
         "preamp": preamp,
         "bands": bands,
     }
+
+
+def encode_preset_to_url_params(
+    preset: Dict[str, Any],
+    bands: List[Dict[str, Any]] | None = None,
+    hw_bands: int = 5,
+) -> str:
+    """Encode a PEQ preset into a deterministic URL query string (compatible with Web Share links)."""
+    from urllib.parse import urlencode
+
+    active_bands = bands if bands is not None else preset.get("bands", [])
+    name = str(preset.get("name", "Custom PEQ")).strip() or "Custom PEQ"
+    preamp = round(float(preset.get("preamp", 0.0)), 1)
+    hw = int(hw_bands or len(active_bands) or 5)
+
+    type_map = {
+        "PK": "PK", "PEAK": "PK", "PEAKING": "PK",
+        "LSQ": "LSQ", "LOW_SHELF": "LSQ", "LOWSHELF": "LSQ", "LS": "LSQ",
+        "HSQ": "HSQ", "HIGH_SHELF": "HSQ", "HIGHSHELF": "HSQ", "HS": "HSQ",
+    }
+
+    params: List[tuple[str, str]] = [
+        ("name", name),
+        ("preamp", f"{preamp:.1f}"),
+        ("hw", str(hw)),
+    ]
+
+    for i, b in enumerate(active_bands):
+        ftype = type_map.get(str(b.get("type", "PK")).upper(), "PK")
+        freq = round(max(20.0, min(20000.0, float(b.get("freq", 1000.0)))), 1)
+        gain = round(max(-18.0, min(18.0, float(b.get("gain", 0.0)))), 2)
+        q = round(max(0.1, min(10.0, float(b.get("q", 1.0)))), 2)
+        freq_str = str(int(freq)) if freq == int(freq) else f"{freq:.1f}"
+        params.append((f"b{i + 1}", f"{ftype},{freq_str},{gain:.1f},{q:.2f}"))
+
+    return urlencode(params)
+
+
+def decode_preset_from_url_params(
+    query_or_url: str,
+    default_name: str = "Shared PEQ Profile",
+) -> Dict[str, Any]:
+    """Decode a PEQ preset from a dac-peq-manager or squig.link share URL / query string."""
+    from urllib.parse import parse_qs, urlparse
+
+    raw = (query_or_url or "").strip()
+    if not raw:
+        raise ValueError("Empty URL or query string.")
+
+    if "?" in raw:
+        parsed_url = urlparse(raw)
+        query_str = parsed_url.query or raw.split("?", 1)[1]
+    elif raw.startswith("http://") or raw.startswith("https://"):
+        parsed_url = urlparse(raw)
+        query_str = parsed_url.query
+    else:
+        query_str = raw.lstrip("?#")
+
+    if not query_str:
+        raise ValueError("No query parameters found in URL.")
+
+    qs = parse_qs(query_str, keep_blank_values=False)
+
+    name_vals = qs.get("name") or qs.get("share") or qs.get("preset")
+    name = name_vals[0].strip() if name_vals and name_vals[0].strip() else default_name
+    slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_") or "shared_peq"
+
+    preamp = 0.0
+    if "preamp" in qs and qs["preamp"]:
+        try:
+            preamp = round(max(-18.0, min(18.0, float(qs["preamp"][0]))), 1)
+        except ValueError:
+            preamp = 0.0
+
+    hw_bands = 5
+    if "hw" in qs and qs["hw"]:
+        try:
+            cand_hw = int(qs["hw"][0])
+            if cand_hw in (5, 8, 9, 10):
+                hw_bands = cand_hw
+        except ValueError:
+            pass
+
+    type_map = {
+        "PK": "PK", "PEAK": "PK", "PEAKING": "PK",
+        "LSQ": "LSQ", "LOW_SHELF": "LSQ", "LOWSHELF": "LSQ", "LS": "LSQ", "LSC": "LSQ",
+        "HSQ": "HSQ", "HIGH_SHELF": "HSQ", "HIGHSHELF": "HSQ", "HS": "HSQ", "HSC": "HSQ",
+    }
+
+    bands: List[Dict[str, Any]] = []
+
+    # Check indexed band keys b1..b20 or f1..f20
+    for idx in range(1, 21):
+        key = f"b{idx}" if f"b{idx}" in qs else (f"f{idx}" if f"f{idx}" in qs else None)
+        if not key or not qs[key]:
+            continue
+        tokens = [t.strip() for t in qs[key][0].split(",") if t.strip()]
+        if len(tokens) < 3:
+            continue
+        try:
+            if tokens[0].upper() in type_map:
+                ftype = type_map[tokens[0].upper()]
+                freq = float(tokens[1])
+                gain = float(tokens[2])
+                q = float(tokens[3]) if len(tokens) >= 4 else 1.0
+            else:
+                # Format: freq,gain,q[,type]
+                freq = float(tokens[0])
+                gain = float(tokens[1])
+                q = float(tokens[2])
+                ftype = type_map.get(tokens[3].upper(), "PK") if len(tokens) >= 4 else "PK"
+
+            bands.append({
+                "index": len(bands) + 1,
+                "type": ftype,
+                "freq": round(max(20.0, min(20000.0, freq)), 1),
+                "gain": round(max(-18.0, min(18.0, gain)), 2),
+                "q": round(max(0.1, min(10.0, q)), 2),
+                "enabled": True,
+            })
+        except ValueError:
+            continue
+
+    # Check semicolon-delimited `eq=` or `filters=` parameter
+    if not bands:
+        eq_raw = (qs.get("eq") or qs.get("filters") or [None])[0]
+        if eq_raw:
+            for item in eq_raw.split(";"):
+                tokens = [t.strip() for t in item.split(",") if t.strip()]
+                if len(tokens) < 3:
+                    continue
+                try:
+                    if tokens[0].upper() in type_map:
+                        ftype = type_map[tokens[0].upper()]
+                        freq = float(tokens[1])
+                        gain = float(tokens[2])
+                        q = float(tokens[3]) if len(tokens) >= 4 else 1.0
+                    else:
+                        freq = float(tokens[0])
+                        gain = float(tokens[1])
+                        q = float(tokens[2])
+                        ftype = type_map.get(tokens[3].upper(), "PK") if len(tokens) >= 4 else "PK"
+                    bands.append({
+                        "index": len(bands) + 1,
+                        "type": ftype,
+                        "freq": round(max(20.0, min(20000.0, freq)), 1),
+                        "gain": round(max(-18.0, min(18.0, gain)), 2),
+                        "q": round(max(0.1, min(10.0, q)), 2),
+                        "enabled": True,
+                    })
+                except ValueError:
+                    continue
+
+    if not bands:
+        raise ValueError("No valid PEQ bands found in URL parameters.")
+
+    return {
+        "name": name,
+        "slug": slug,
+        "description": f"Shared via URL ({len(bands)} bands)",
+        "preamp": preamp,
+        "hw_bands": hw_bands,
+        "bands": bands,
+    }
+

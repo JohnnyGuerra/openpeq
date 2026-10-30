@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from dac_peq.exporters import (
     DEFAULT_CX31993_SINK,
+    decode_preset_from_url_params,
+    encode_preset_to_url_params,
     export_apo_suite,
     export_pipewire_conf,
     export_qudelix,
@@ -266,6 +268,41 @@ def test_parse_parametric_eq_invalid():
 
     with pytest.raises(ValueError, match="No valid parametric EQ filters"):
         parse_parametric_eq("# Only comments\n# Nothing else here\n")
+
+
+def test_url_params_encode_decode_roundtrip():
+    """Verify encoding and decoding PEQ presets via URL query parameters and squig.link format."""
+    import pytest
+
+    encoded = encode_preset_to_url_params(SAMPLE_PRESET, hw_bands=5)
+    assert "name=bmasterx6" in encoded
+    assert "preamp=-2.5" in encoded
+    assert "hw=5" in encoded
+    assert "b1=LSQ%2C50%2C2.2%2C0.71" in encoded
+
+    decoded = decode_preset_from_url_params(f"https://johnnyguerra.github.io/dac-peq-manager/?{encoded}")
+    assert decoded["name"] == "bmasterx6"
+    assert decoded["preamp"] == -2.5
+    assert decoded["hw_bands"] == 5
+    assert len(decoded["bands"]) == 5
+    assert decoded["bands"][0]["type"] == "LSQ"
+    assert decoded["bands"][0]["freq"] == 50.0
+    assert decoded["bands"][0]["gain"] == 2.2
+    assert decoded["bands"][0]["q"] == 0.71
+
+    # Also test squig.link / semicolon eq= format
+    squig_url = "https://silicagel.squig.link/?share=SilicaGel_Target&preamp=-3.2&eq=LSQ,105,4.5,0.71;PK,2800,2.1,1.50;HSQ,10000,-1.5,0.71"
+    decoded_squig = decode_preset_from_url_params(squig_url)
+    assert decoded_squig["name"] == "SilicaGel_Target"
+    assert decoded_squig["preamp"] == -3.2
+    assert len(decoded_squig["bands"]) == 3
+    assert decoded_squig["bands"][0]["type"] == "LSQ"
+    assert decoded_squig["bands"][1]["freq"] == 2800.0
+    assert decoded_squig["bands"][2]["type"] == "HSQ"
+
+    with pytest.raises(ValueError):
+        decode_preset_from_url_params("https://example.com/?foo=bar")
+
 
 
 

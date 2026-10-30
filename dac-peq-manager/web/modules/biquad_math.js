@@ -349,3 +349,84 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
   selected.sort((a, b) => Number(a.freq ?? 1000.0) - Number(b.freq ?? 1000.0));
   return selected.map((b, i) => ({ ...b, index: i + 1 }));
 }
+
+export function applyMacroAdjustments(
+  bands,
+  bassDb = 0.0,
+  earGainDb = 0.0,
+  trebleDb = 0.0,
+  minGainDb = -12.0,
+  maxGainDb = 12.0
+) {
+  if (!bands || bands.length === 0) return [];
+
+  const out = bands.map((b) => ({ ...b }));
+  const n = out.length;
+
+  let bassIdx = 0;
+  let bestBassFreq = Infinity;
+  for (let i = 0; i < n; i++) {
+    const f = Number(out[i].freq ?? 1000.0);
+    if (f < bestBassFreq) {
+      bestBassFreq = f;
+      bassIdx = i;
+    }
+  }
+
+  let earIdx = 0;
+  let bestEarDist = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (n >= 2 && i === bassIdx) continue;
+    const f = Number(out[i].freq ?? 1000.0);
+    const dist = Math.abs(f - 2850.0);
+    if (dist < bestEarDist) {
+      bestEarDist = dist;
+      earIdx = i;
+    }
+  }
+
+  let trebleIdx = n - 1;
+  let bestTrebleFreq = -1.0;
+  for (let i = 0; i < n; i++) {
+    if (n >= 3 && (i === bassIdx || i === earIdx)) continue;
+    const f = Number(out[i].freq ?? 1000.0);
+    if (f >= bestTrebleFreq) {
+      bestTrebleFreq = f;
+      trebleIdx = i;
+    }
+  }
+
+  if (Math.abs(Number(bassDb)) > 1e-6) {
+    const newG = Number(out[bassIdx].gain ?? 0.0) + Number(bassDb);
+    out[bassIdx].gain = Math.round(Math.max(minGainDb, Math.min(maxGainDb, newG)) * 100) / 100;
+  }
+
+  if (Math.abs(Number(earGainDb)) > 1e-6 && n >= 2) {
+    const newG = Number(out[earIdx].gain ?? 0.0) + Number(earGainDb);
+    out[earIdx].gain = Math.round(Math.max(minGainDb, Math.min(maxGainDb, newG)) * 100) / 100;
+  }
+
+  if (Math.abs(Number(trebleDb)) > 1e-6 && n >= 3) {
+    const newG = Number(out[trebleIdx].gain ?? 0.0) + Number(trebleDb);
+    out[trebleIdx].gain = Math.round(Math.max(minGainDb, Math.min(maxGainDb, newG)) * 100) / 100;
+  }
+
+  return out;
+}
+
+export function smoothCouplerBiquads(bands) {
+  if (!bands || bands.length === 0) return [];
+  return bands.map((b) => {
+    const copy = { ...b };
+    const freq = Number(copy.freq ?? 1000.0);
+    const gain = Number(copy.gain ?? 0.0);
+    const q = Number(copy.q ?? 1.0);
+
+    if (freq >= 7400.0 && freq <= 9600.0 && q > 2.0 && gain <= -3.0) {
+      copy.q = 1.4;
+      copy.gain = Math.round(Math.max(-2.0, gain * 0.5) * 100) / 100;
+    }
+    return copy;
+  });
+}
+
