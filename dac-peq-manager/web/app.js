@@ -156,6 +156,45 @@ const PRESETS = {
       { type: "HSQ", freq: 10000.0, gain: 0.0, q: 0.71 },
     ],
   },
+  "bk-5128-df": {
+    name: "B&K 5128 Diffuse Field (-10 dB Tilt)",
+    slug: "bk_5128_df",
+    description: "Brüel & Kjær 5128 HRTF diffuse field target with a -1 dB/oct warm tilt. Preserves natural lower-midrange body with airy 11kHz extension.",
+    preamp: -2.2,
+    bands: [
+      { type: "LSQ", freq: 85.0, gain: 2.0, q: 0.71 },
+      { type: "PK", freq: 280.0, gain: 0.6, q: 1.10 },
+      { type: "PK", freq: 2650.0, gain: 1.4, q: 1.35 },
+      { type: "PK", freq: 4600.0, gain: -1.6, q: 2.10 },
+      { type: "HSQ", freq: 11000.0, gain: 0.8, q: 0.71 },
+    ],
+  },
+  "oratory-usound": {
+    name: "Oratory1990 Optimum HiFi (USound)",
+    slug: "oratory_usound",
+    description: "Oratory1990 / USound audiophile preference target. Rich bass warmth, lush vocal density without Harman mid-bass scoop, and smooth 2.75kHz ear gain.",
+    preamp: -3.2,
+    bands: [
+      { type: "LSQ", freq: 100.0, gain: 3.2, q: 0.71 },
+      { type: "PK", freq: 240.0, gain: 0.8, q: 1.15 },
+      { type: "PK", freq: 2750.0, gain: 1.2, q: 1.40 },
+      { type: "PK", freq: 5400.0, gain: -1.4, q: 2.00 },
+      { type: "HSQ", freq: 10000.0, gain: -0.8, q: 0.71 },
+    ],
+  },
+  "iso-loudness": {
+    name: "Late-Night Loudness (ISO 226 Contour)",
+    slug: "iso_loudness",
+    description: "ISO 226 / Fletcher-Munson equal-loudness contour for low-SPL listening (<65 dB). Restores perceived sub-bass weight and upper-treble air at quiet volumes.",
+    preamp: -3.5,
+    bands: [
+      { type: "LSQ", freq: 60.0, gain: 3.5, q: 0.71 },
+      { type: "PK", freq: 210.0, gain: -0.8, q: 1.25 },
+      { type: "PK", freq: 3200.0, gain: -1.6, q: 1.60 },
+      { type: "PK", freq: 6200.0, gain: -0.6, q: 2.00 },
+      { type: "HSQ", freq: 10500.0, gain: 2.2, q: 0.71 },
+    ],
+  },
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────

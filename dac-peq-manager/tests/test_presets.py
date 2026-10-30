@@ -25,6 +25,9 @@ PRESETS_DIR = Path(__file__).resolve().parent.parent / "presets"
     "targets/harman_in_ear_2019v2.json",
     "targets/ief_neutral.json",
     "targets/jm_1.json",
+    "targets/bk_5128_df.json",
+    "targets/oratory_usound.json",
+    "targets/iso_loudness.json",
 ])
 def test_preset_validity(preset_filename: str):
     """Verify that each bundled preset adheres to schema, band limits, and frequency rules."""

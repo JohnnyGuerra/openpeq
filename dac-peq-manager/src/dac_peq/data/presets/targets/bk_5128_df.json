@@ -1,0 +1,13 @@
+{
+  "name": "B&K 5128 Diffuse Field (-10 dB Tilt)",
+  "slug": "bk_5128_df",
+  "description": "Brüel & Kjær 5128 HRTF diffuse field target with a -1 dB/oct warm tilt. Preserves natural lower-midrange body with airy 11kHz extension.",
+  "preamp": -2.2,
+  "bands": [
+    { "type": "LSQ", "freq": 85.0, "gain": 2.0, "q": 0.71 },
+    { "type": "PK", "freq": 280.0, "gain": 0.6, "q": 1.10 },
+    { "type": "PK", "freq": 2650.0, "gain": 1.4, "q": 1.35 },
+    { "type": "PK", "freq": 4600.0, "gain": -1.6, "q": 2.10 },
+    { "type": "HSQ", "freq": 11000.0, "gain": 0.8, "q": 0.71 }
+  ]
+}

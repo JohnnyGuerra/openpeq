@@ -1,0 +1,13 @@
+{
+  "name": "Late-Night Loudness (ISO 226 Contour)",
+  "slug": "iso_loudness",
+  "description": "ISO 226 / Fletcher-Munson equal-loudness contour for low-SPL listening (<65 dB). Restores perceived sub-bass weight and upper-treble air at quiet volumes.",
+  "preamp": -3.5,
+  "bands": [
+    { "type": "LSQ", "freq": 60.0, "gain": 3.5, "q": 0.71 },
+    { "type": "PK", "freq": 210.0, "gain": -0.8, "q": 1.25 },
+    { "type": "PK", "freq": 3200.0, "gain": -1.6, "q": 1.60 },
+    { "type": "PK", "freq": 6200.0, "gain": -0.6, "q": 2.00 },
+    { "type": "HSQ", "freq": 10500.0, "gain": 2.2, "q": 0.71 }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Oratory1990 Optimum HiFi (USound)",
+  "slug": "oratory_usound",
+  "description": "Oratory1990 / USound audiophile preference target. Rich bass warmth, lush vocal density without Harman mid-bass scoop, and smooth 2.75kHz ear gain.",
+  "preamp": -3.2,
+  "bands": [
+    { "type": "LSQ", "freq": 100.0, "gain": 3.2, "q": 0.71 },
+    { "type": "PK", "freq": 240.0, "gain": 0.8, "q": 1.15 },
+    { "type": "PK", "freq": 2750.0, "gain": 1.2, "q": 1.40 },
+    { "type": "PK", "freq": 5400.0, "gain": -1.4, "q": 2.00 },
+    { "type": "HSQ", "freq": 10000.0, "gain": -0.8, "q": 0.71 }
+  ]
+}

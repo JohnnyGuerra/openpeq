@@ -16,7 +16,7 @@
   <meta name="description" content="Open-source WebHID flasher for KTMicro KT02H20 / WalkPlay USB DACs (Kiwi Ears Allegro Mini, BASN BmasterX 6) and Host DSP generator for JCALLY JM6 Pro (Conexant CX31993).">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d2ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 10v3'/%3E%3Cpath d='M6 6v11'/%3E%3Cpath d='M10 3v18'/%3E%3Cpath d='M14 8v7'/%3E%3Cpath d='M18 5v13'/%3E%3Cpath d='M22 10v3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css?v=15">
-  <script type="module" src="app.js?v=20261030_12"></script>
+  <script type="module" src="app.js?v=20261030_13"></script>
 </head>
 <body>
   <div class="container">
@@ -177,6 +177,30 @@
           </h3>
           <p>Harman target: Heavy +9dB sub-bass shelf and forward +12dB ear gain peak.</p>
         </div>
+
+        <div class="preset-card" data-preset="bk-5128-df" tabindex="0" role="button" aria-pressed="false">
+          <h3>
+            <span>B&amp;K 5128 DF</span>
+            <span class="tag" style="color: var(--accent-cyan);">DF -10dB Tilt</span>
+          </h3>
+          <p>B&amp;K 5128 HRTF diffuse field (-1 dB/oct tilt): Natural lower-mid body and airy 11kHz extension.</p>
+        </div>
+
+        <div class="preset-card" data-preset="oratory-usound" tabindex="0" role="button" aria-pressed="false">
+          <h3>
+            <span>Optimum HiFi</span>
+            <span class="tag" style="color: var(--accent-purple);">USound Target</span>
+          </h3>
+          <p>Oratory1990 preference curve: Lush vocal density without mid-bass scoop or 3kHz shout.</p>
+        </div>
+
+        <div class="preset-card" data-preset="iso-loudness" tabindex="0" role="button" aria-pressed="false">
+          <h3>
+            <span>Late-Night ISO</span>
+            <span class="tag" style="color: var(--accent-green);">Low-SPL Contour</span>
+          </h3>
+          <p>ISO 226 equal-loudness contour (&lt;65 dB): Restores sub-bass weight and top-octave sparkle.</p>
+        </div>
       </div>
     </section>
 
@@ -254,6 +278,9 @@
               <option value="harman-2019v2">Harman In-Ear 2019v2</option>
               <option value="jm-1">JM-1 Modern Target</option>
               <option value="ief-neutral">IEF Neutral (Crinacle)</option>
+              <option value="bk-5128-df">B&amp;K 5128 DF (-10dB Tilt)</option>
+              <option value="oratory-usound">Optimum HiFi (USound)</option>
+              <option value="iso-loudness">Late-Night ISO 226</option>
             </select>
             <label for="selPreferenceTolerance" style="color: var(--text-muted); margin-left: 0.3rem;">Bounds:</label>
             <select id="selPreferenceTolerance" aria-label="Preference Tolerance Bounds" style="width: auto; max-width: 100%; padding: 0.1rem 0.3rem; font-size: 0.75rem; background: transparent; border: none; color: var(--text-primary);" title="Preference tolerance envelope width">
