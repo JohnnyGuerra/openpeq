@@ -2,36 +2,43 @@
   "news.ycombinator.com": {
     "referrer": "news.ycombinator.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-29",
+    "last_seen": "2026-10-30",
     "count": 6,
     "uniques": 5
   },
   "github.com": {
     "referrer": "github.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-29",
-    "count": 4,
-    "uniques": 3
+    "last_seen": "2026-10-30",
+    "count": 6,
+    "uniques": 5
   },
   "app.raindrop.io": {
     "referrer": "app.raindrop.io",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-29",
+    "last_seen": "2026-10-30",
     "count": 1,
     "uniques": 1
   },
   "hns.local": {
     "referrer": "hns.local",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-29",
+    "last_seen": "2026-10-30",
     "count": 1,
     "uniques": 1
   },
   "vuink.com": {
     "referrer": "vuink.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-29",
+    "last_seen": "2026-10-30",
     "count": 1,
     "uniques": 1
+  },
+  "reddit.com": {
+    "referrer": "reddit.com",
+    "first_seen": "2026-10-30",
+    "last_seen": "2026-10-30",
+    "count": 3,
+    "uniques": 2
   }
 }
