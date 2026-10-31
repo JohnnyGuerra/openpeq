@@ -1078,9 +1078,13 @@ async function applyToDevice(commitFlash = false) {
     // Only write 0x66 if supported; Kiwi Ears Allegro Mini (0x31B2) uses unity gain (noPregain).
     // Note: Always write 0x66 even when preamp is 0.0 dB (preampByte = 0x00) to clear prior digital
     // attenuation from previous profiles (audit credit: Captain Ødegard, Head-Fi).
+    // Preamp is clamped to [-24.0, +12.0] dB to prevent signed int8 sign inversion/acoustic clipping hazard.
     const isKiwiMini = connectedHidDevice && (connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722);
     if (!isKiwiMini) {
-      const preampByte = Math.round(currentPreset.preamp * 2.0) & 0xff;
+      const rawVal = Number(currentPreset.preamp ?? 0.0);
+      const safeVal = Number.isFinite(rawVal) ? rawVal : 0.0;
+      const clampedPreamp = Math.max(-24.0, Math.min(12.0, safeVal));
+      const preampByte = Math.round(clampedPreamp * 2.0) & 0xff;
       await sendHidReport(REPORT_ID, 0x66, CMD_WRITE, preampByte, 0, 0, 0);
     }
 
@@ -1095,6 +1099,9 @@ async function applyToDevice(commitFlash = false) {
 
     // 4. NVRAM Flash Commit & Event-Driven Re-Enumeration Watcher
     if (commitFlash) {
+      if (isFiio && slotId !== 3) {
+        showToast("Note: JA11 slots 1, 2, and 4 are read-only factory presets in firmware. Changes will only persist permanently in Slot 3 (USER1).", "warning");
+      }
       const stats = recordFlashCommit(connectedHidDevice);
       updateFlashCounterBadge(connectedHidDevice);
       isRebootingPostCommit = true;

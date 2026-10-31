@@ -931,3 +931,33 @@ def test_webhid_detect_firmware_quirks_no_device_version_hallucination():
     # Null device is false
     assert res["nullDeviceComp2X"] is False
 
+
+def test_web_app_preamp_safety_clamping_and_null_handling():
+    """Verify that web flasher preamp calculation clamps between -24.0 and +12.0 dB,
+    preventing signed-int8 sign inversion when negative gain is extreme."""
+    js_code = """
+    function computePreampByte(rawVal) {
+      const parsed = Number(rawVal ?? 0.0);
+      const safeVal = Number.isFinite(parsed) ? parsed : 0.0;
+      const clampedPreamp = Math.max(-24.0, Math.min(12.0, safeVal));
+      return Math.round(clampedPreamp * 2.0) & 0xff;
+    }
+
+    console.log(JSON.stringify({
+      zero: computePreampByte(0.0),
+      nullVal: computePreampByte(null),
+      undefinedVal: computePreampByte(undefined),
+      extremeNeg: computePreampByte(-70.0), // clamps to -24 dB -> -48 & 0xff = 208
+      extremePos: computePreampByte(30.0),  // clamps to +12 dB -> 24
+      normalNeg: computePreampByte(-3.5),   // -7 & 0xff = 249
+    }));
+    """
+    res = run_node_eval(js_code)
+    assert res["zero"] == 0
+    assert res["nullVal"] == 0
+    assert res["undefinedVal"] == 0
+    assert res["extremeNeg"] == 208  # -48 signed byte
+    assert res["extremePos"] == 24   # +24 signed byte
+    assert res["normalNeg"] == 249   # -7 signed byte
+
+

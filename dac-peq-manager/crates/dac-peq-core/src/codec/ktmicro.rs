@@ -134,14 +134,20 @@ pub fn encode_preset_payload(
 ) -> Result<Vec<KtReport>> {
     assert_safe_for_hardware_flash(vid, pid, None)?;
 
-    let is_allegro_mini = vid == 0x31B2 && pid == 0x0111;
+    let is_allegro_mini = vid == 0x31B2;
     let mut reports = Vec::new();
 
     // 1. Digital preamp (Register 0x66) - Omitted on Allegro Mini to prevent volume lockout
     // Note: Must always write on supported hardware even when preamp == 0.0 dB to clear
     // any prior digital attenuation (audit credit: Captain Ødegard, Head-Fi).
+    // Preamp is clamped to [-24.0, +12.0] dB to prevent signed int8 overflow/acoustic safety hazard.
     if !is_allegro_mini {
-        let gain_byte = (preset.preamp * 2.0).round() as i8 as u8;
+        let clamped = if preset.preamp.is_nan() {
+            0.0
+        } else {
+            preset.preamp.clamp(-24.0, 12.0)
+        };
+        let gain_byte = (clamped * 2.0).round() as i8 as u8;
         reports.push(encode_write_register(REG_PREAMP, [gain_byte, 0x00, 0x00, 0x00]));
     }
 

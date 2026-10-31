@@ -35,6 +35,7 @@ workarounds reverse-engineered by the open-source community:
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
@@ -650,9 +651,17 @@ class KTMicroDSPDevice(BaseDSPDevice):
         # 3. Write Preamp (Register 0x66)
         # KTMicro stores signed digital gain with 0.5 dB steps: value = round(gain_db * 2)
         # Per GEMINI.md Rule 1: skip register 0x66 on Allegro Mini / no_pregain to prevent volume lockout
+        # Preamp is clamped to [-24.0, +12.0] dB to prevent signed int8 overflow/acoustic safety hazard.
         if not self.is_allegro_mini_or_no_pregain():
-            preamp_db = float(preset.get("preamp", 0.0))
-            preamp_encoded = int(round(preamp_db * 2.0)) & 0xFF
+            preamp_val = preset.get("preamp")
+            try:
+                preamp_db = float(preamp_val) if preamp_val is not None else 0.0
+                if math.isnan(preamp_db):
+                    preamp_db = 0.0
+            except (ValueError, TypeError):
+                preamp_db = 0.0
+            clamped_preamp = max(-24.0, min(12.0, preamp_db))
+            preamp_encoded = int(round(clamped_preamp * 2.0)) & 0xFF
             self._send_packet(self.REG_PREAMP, self.CMD_WRITE, preamp_encoded, 0x00, 0x00, 0x00)
             time.sleep(0.01)
 

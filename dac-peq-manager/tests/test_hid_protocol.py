@@ -315,3 +315,58 @@ def test_ktmicro_zero_db_preamp_packet_included_for_ja11():
         assert len(preamp_pkts_allegro) == 0, "Register 0x66 must NOT be sent for Allegro Mini"
         assert dev_allegro.REG_PREAMP not in dev_allegro._dev.ram_registers
 
+
+def test_ktmicro_preamp_null_and_extreme_clamping():
+    """Verify that null/None preamp safely defaults to 0.0 dB and extreme values clamp to [-24.0, +12.0] dB."""
+    dev = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True)
+    dummy_bands = [{"index": i, "type": "PK", "freq": 1000.0, "gain": 0.0, "q": 1.0} for i in range(1, 6)]
+
+    # 1. Null / None preamp
+    with dev:
+        dev._dev.ram_registers.clear()
+        preset_null = {
+            "name": "null_preamp",
+            "preamp": None,
+            "bands": dummy_bands,
+        }
+        dev.apply_preset(preset_null, commit_flash=False)
+        assert dev._dev.ram_registers[dev.REG_PREAMP][6] == 0x00
+
+    # 2. Extreme negative attenuation (-70.0 dB) -> clamps to -24.0 dB (-48 byte = 208)
+    with dev:
+        dev._dev.ram_registers.clear()
+        preset_neg = {
+            "name": "extreme_neg",
+            "preamp": -70.0,
+            "bands": dummy_bands,
+        }
+        dev.apply_preset(preset_neg, commit_flash=False)
+        assert dev._dev.ram_registers[dev.REG_PREAMP][6] == ((-48) & 0xFF)
+
+    # 3. Extreme positive boost (+30.0 dB) -> clamps to +12.0 dB (+24 byte)
+    with dev:
+        dev._dev.ram_registers.clear()
+        preset_pos = {
+            "name": "extreme_pos",
+            "preamp": 30.0,
+            "bands": dummy_bands,
+        }
+        dev.apply_preset(preset_pos, commit_flash=False)
+        assert dev._dev.ram_registers[dev.REG_PREAMP][6] == 24
+
+
+def test_ktmicro_arbitrary_31b2_pid_guarded():
+    """Verify any 0x31B2 device (e.g. 0x31B2:0x9999) omits register 0x66 to prevent volume lockout."""
+    dev_oem = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x9999, use_mock=True)
+    dummy_bands = [{"index": i, "type": "PK", "freq": 1000.0, "gain": 0.0, "q": 1.0} for i in range(1, 6)]
+    with dev_oem:
+        dev_oem._dev.ram_registers.clear()
+        preset = {
+            "name": "oem_test",
+            "preamp": -3.0,
+            "bands": dummy_bands,
+        }
+        dev_oem.apply_preset(preset, commit_flash=False)
+        assert dev_oem.REG_PREAMP not in dev_oem._dev.ram_registers
+
+

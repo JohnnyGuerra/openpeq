@@ -150,6 +150,46 @@ fn test_ktmicro_zero_db_preamp_writes_register_0x66() {
         !allegro_reports.iter().any(|r| r.as_bytes()[1] == REG_PREAMP),
         "Register 0x66 must be omitted on Allegro Mini even with 0.0 dB preamp!"
     );
+
+    // Any device under VID 0x31B2 (e.g. OEM PID 0x9999) must also omit 0x66
+    let oem_allegro_reports = encode_preset_payload(&preset, 0x31B2, 0x9999, 3, true, true)
+        .expect("Payload generation failed");
+    assert!(
+        !oem_allegro_reports.iter().any(|r| r.as_bytes()[1] == REG_PREAMP),
+        "Register 0x66 must be omitted across all 0x31B2 devices!"
+    );
+}
+
+#[test]
+fn test_ktmicro_preamp_safety_clamping_prevents_int8_overflow() {
+    let mut preset = PeqPreset {
+        name: "Extreme Attenuation Test".into(),
+        description: None,
+        preamp: -70.0, // Without clamp, (-140) & 0xff = 116 (+58 dB boost acoustic hazard!)
+        slot_id: Some(3),
+        bands: vec![BiquadBand::new(FilterType::Peaking, 1000.0, 0.0, 1.0)],
+        full_bands: None,
+    };
+
+    let reports = encode_preset_payload(&preset, 0x2972, 0x0102, 3, false, true)
+        .expect("Payload generation failed");
+    let preamp_rpt = reports
+        .iter()
+        .find(|r| r.as_bytes()[1] == REG_PREAMP)
+        .expect("Register 0x66 expected");
+    let bytes = preamp_rpt.as_bytes();
+    // -24.0 dB * 2 = -48 -> as i8 as u8 = 208 (0xD0)
+    assert_eq!(bytes[7], (-48i8) as u8, "-70.0 dB must clamp to -24.0 dB (-48 byte)");
+
+    // Test extreme positive boost (+30.0 dB -> clamps to +12.0 dB = +24 byte)
+    preset.preamp = 30.0;
+    let reports_pos = encode_preset_payload(&preset, 0x2972, 0x0102, 3, false, true)
+        .expect("Payload generation failed");
+    let preamp_rpt_pos = reports_pos
+        .iter()
+        .find(|r| r.as_bytes()[1] == REG_PREAMP)
+        .expect("Register 0x66 expected");
+    assert_eq!(preamp_rpt_pos.as_bytes()[7], 24u8, "+30.0 dB must clamp to +12.0 dB (24 byte)");
 }
 
 #[test]
