@@ -883,3 +883,51 @@ def test_file_input_preset_preserves_disabled_state():
     assert res["bands"][0]["enabled"] is True
     assert res["bands"][1]["enabled"] is False
     assert res["bands"][2]["enabled"] is True
+
+
+def test_webhid_detect_firmware_quirks_no_device_version_hallucination():
+    """Verify that detectFirmwareQuirks does not rely on deviceVersion/bcdDevice (which WebHID lacks)."""
+    js_code = """
+    import { detectFirmwareQuirks } from "./modules/hid_transport.js";
+
+    // Standard W3C WebHID HIDDevice objects (no deviceVersion or bcdDevice property)
+    const ja11 = { vendorId: 0x2972, productId: 0x0102, productName: "FiiO JA11" };
+    const allegro = { vendorId: 0x31b2, productId: 0x0111, productName: "Kiwi Ears Allegro Mini" };
+    const freedsp = { vendorId: 0x31b2, productId: 0x0112, productName: "Moondrop FreeDSP" };
+    const walkplay = { vendorId: 0x0bda, productId: 0x0023, productName: "WalkPlay DAC" };
+    const genericAllegro = { vendorId: 0x9999, productId: 0x8888, productName: "Generic Allegro DAC" };
+    const genericOther = { vendorId: 0x1234, productId: 0x5678, productName: "Some Other DAC" };
+
+    const ja11Quirks = detectFirmwareQuirks(ja11);
+    const allegroQuirks = detectFirmwareQuirks(allegro);
+    const freedspQuirks = detectFirmwareQuirks(freedsp);
+    const walkplayQuirks = detectFirmwareQuirks(walkplay);
+    const genericAllegroQuirks = detectFirmwareQuirks(genericAllegro);
+    const genericOtherQuirks = detectFirmwareQuirks(genericOther);
+
+    console.log(JSON.stringify({
+      ja11Comp2X: ja11Quirks.requiresCompensate2X,
+      allegroComp2X: allegroQuirks.requiresCompensate2X,
+      freedspComp2X: freedspQuirks.requiresCompensate2X,
+      walkplayComp2X: walkplayQuirks.requiresCompensate2X,
+      genericAllegroComp2X: genericAllegroQuirks.requiresCompensate2X,
+      genericOtherComp2X: genericOtherQuirks.requiresCompensate2X,
+      nullDeviceComp2X: detectFirmwareQuirks(null).requiresCompensate2X
+    }));
+    """
+    res = run_node_eval(js_code)
+    # FiiO JA11 defaults to native clocking (firmware v1.8+)
+    assert res["ja11Comp2X"] is False
+    # Allegro Mini / KT02H20 defaults to 2X compensation
+    assert res["allegroComp2X"] is True
+    # FreeDSP is 9-band standard clocking
+    assert res["freedspComp2X"] is False
+    # WalkPlay 0x0bda:0x0023 is 2X compensation
+    assert res["walkplayComp2X"] is True
+    # Product name with "allegro" is 2X compensation
+    assert res["genericAllegroComp2X"] is True
+    # Generic other is false
+    assert res["genericOtherComp2X"] is False
+    # Null device is false
+    assert res["nullDeviceComp2X"] is False
+

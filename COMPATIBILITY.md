@@ -9,7 +9,7 @@ This document tracks the hardware support, protocol reverse-engineering status, 
 | Badge | Status | Definition |
 | :---: | :--- | :--- |
 | 🟢 | **Verified & Tested on Hardware** | Physically tested on device. Live PEQ RAM writes, hardware NVRAM commits (`0x53`), volume controls on iOS/Android, and 2-way readback verified working. |
-| 🟡 | **Protocol Complete (Awaiting Tester)** | Protocol framing, biquad registers, and checksum calculations implemented and unit-tested; awaiting community confirmation on physical silicon. |
+| 🟡 | **Protocol Implemented (Awaiting Silicon Tester)** | Protocol framing, biquad registers, and checksum calculations implemented and unit-tested; awaiting community confirmation on physical silicon. |
 | 🔵 | **Protocol In Development (Help Wanted)** | Protocol analyzed via APK / JS / captures. Actively seeking USB packet captures, tester validation, or device donations. |
 | 🔴 | **Fixed Mask ROM / Host DSP Only** | Silicon uses fixed mask ROM with One-Time Programmable (OTP) registers (e.g. Conexant CX31993). Hardware flashing is permanently locked out to prevent bricking; managed via host DSP (PipeWire, Wavelet, EqualizerAPO). |
 
@@ -17,7 +17,7 @@ This document tracks the hardware support, protocol reverse-engineering status, 
 
 ## 1. Hardware-Flashable Devices (Onboard NVRAM PEQ)
 
-These devices store Parametric EQ filters directly into onboard non-volatile memory (EEPROM/Flash). Once burned, the acoustic profile persists across all sources (iPhone, Android, Mac, Windows, Linux, iPad, Nintendo Switch) with zero background apps running.
+These devices store Parametric EQ filters directly into onboard non-volatile memory (EEPROM/Flash). Once saved to NVRAM, the acoustic profile persists across all sources (iPhone, Android, Mac, Windows, Linux, iPad, Nintendo Switch) with zero background apps running.
 
 | Device | Brand | Chipset / Architecture | USB VID:PID | EQ Bands | Memory Slots | Status | Notes |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |

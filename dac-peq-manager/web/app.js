@@ -713,7 +713,7 @@ export function onDragTouchEnd() {
 
 // ── Flash Counter UI Badge ────────────────────────────────────────────────────
 function updateFlashCounterBadge(dev) {
-  const badge = document.getElementById("flashCounterBadge");
+  const badge = document.getElementById("nvramWearBadge") || document.getElementById("flashCounterBadge");
   const lbl = document.getElementById("lblFlashCount");
   if (!badge || !lbl) return;
 
@@ -724,23 +724,24 @@ function updateFlashCounterBadge(dev) {
 
   const stats = getFlashStats(dev);
   const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-  const burns24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+  const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
 
   lbl.textContent = stats.total;
   badge.style.display = "inline-flex";
 
-  if (stats.total >= 50 || burns24h >= 10) {
+  const wearDisclaimer = "Local browser estimated write counter; not read from hardware telemetry";
+  if (stats.total >= 50 || writes24h >= 10) {
     lbl.style.color = "var(--accent-red)";
     badge.style.borderColor = "var(--accent-red)";
-    badge.title = `⚠️ HIGH NVRAM FLASH WEAR! ${burns24h} burns in last 24h, ${stats.total} total burns. EEPROM wear limit approaching.`;
-  } else if (burns24h >= 5) {
+    badge.title = `⚠️ HIGH NVRAM FLASH WEAR! ${writes24h} writes in last 24h, ${stats.total} total writes. EEPROM wear limit approaching. (${wearDisclaimer})`;
+  } else if (writes24h >= 5) {
     lbl.style.color = "var(--accent-yellow)";
     badge.style.borderColor = "var(--accent-yellow)";
-    badge.title = `Moderate flash wear: ${burns24h} burns in last 24h, ${stats.total} total burns.`;
+    badge.title = `Moderate flash wear: ${writes24h} writes in last 24h, ${stats.total} total writes. (${wearDisclaimer})`;
   } else {
     lbl.style.color = "var(--accent-green)";
     badge.style.borderColor = "var(--border-color)";
-    badge.title = `Flash commits: ${stats.total} total (${burns24h} in last 24h).`;
+    badge.title = `NVRAM writes: ${stats.total} total (${writes24h} in last 24h). (${wearDisclaimer})`;
   }
 }
 
@@ -942,24 +943,24 @@ async function applyToDevice(commitFlash = false) {
   if (commitFlash && !isDemoMode) {
     const stats = getFlashStats(connectedHidDevice);
     const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-    const burns24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+    const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
 
     let wearWarning = "";
-    if (burns24h >= 10 || stats.total >= 50) {
+    if (writes24h >= 10 || stats.total >= 50) {
       wearWarning =
         `⚠️ FLASH SILICON WEAR WARNING!\n` +
-        `This DAC has received ${burns24h} flash burns in the last 24 hours (${stats.total} total burns).\n` +
-        `Budget EEPROMs degrade after repeated flashing. Burning too frequently can permanently brick the DSP memory.\n\n`;
+        `This DAC has received ${writes24h} NVRAM writes in the last 24 hours (${stats.total} total writes).\n` +
+        `Budget EEPROMs degrade after repeated writing. Writing too frequently can permanently wear out the DSP memory.\n\n`;
     }
 
     const ok = confirm(
       wearWarning +
-        "⚠️ Burn to hardware NVRAM flash memory?\n\n" +
-        `Flash memory has an endurance limit (~10k-100k write cycles). This permanently commits the ${activeHardwareBands}-band PEQ into onboard EEPROM so it persists across reboots and host swaps.\n\n` +
-        "Do not disconnect the USB-C cable during the burn. Proceed?"
+        "⚠️ Save to persistent hardware NVRAM?\n\n" +
+        `Flash memory has an endurance limit (~10k-100k write cycles). This permanently saves the ${activeHardwareBands}-band PEQ into onboard persistent NVRAM so it persists across reboots and host swaps.\n\n` +
+        "Do not disconnect the USB-C cable while saving to NVRAM. Proceed?"
     );
     if (!ok) {
-      showToast("NVRAM flash cancelled by user.");
+      showToast("NVRAM save cancelled by user.");
       return;
     }
   }
@@ -968,7 +969,7 @@ async function applyToDevice(commitFlash = false) {
   const selSlot = document.getElementById("selHardwareSlot");
   const slotId = selSlot ? parseInt(selSlot.value, 10) || 3 : 3;
 
-  // Automatic First-Burn Stock Safety Snapshot
+  // Automatic First-Commit Stock Safety Snapshot
   if (commitFlash && connectedHidDevice && !isDemoMode) {
     if (!hasStockBackup(connectedHidDevice, slotId)) {
       try {
@@ -1031,7 +1032,7 @@ async function applyToDevice(commitFlash = false) {
         }
         const stats = recordFlashCommit(connectedHidDevice);
         updateFlashCounterBadge(connectedHidDevice);
-        showToast(`${bandCount}-Band PEQ burned to WalkPlay flash (Burn #${stats.total})!`);
+        showToast(`${bandCount}-Band PEQ saved to WalkPlay NVRAM (Commit #${stats.total})!`);
       } else {
         showToast(`${bandCount}-Band PEQ written to WalkPlay live DSP RAM!`);
       }
@@ -1049,7 +1050,7 @@ async function applyToDevice(commitFlash = false) {
       if (commitFlash) {
         const stats = recordFlashCommit(connectedHidDevice);
         updateFlashCounterBadge(connectedHidDevice);
-        showToast(`9-Band PEQ burned to Moondrop FreeDSP flash (Burn #${stats.total})!`);
+        showToast(`9-Band PEQ saved to Moondrop FreeDSP NVRAM (Commit #${stats.total})!`);
       } else {
         showToast("9-Band PEQ written to Moondrop FreeDSP live RAM!");
       }
@@ -1076,7 +1077,7 @@ async function applyToDevice(commitFlash = false) {
     // 3. Preamp (Register 0x66 in 0.5 dB steps)
     // Only write 0x66 if supported; Kiwi Ears Allegro Mini (0x31B2) uses unity gain (noPregain)
     const isKiwiMini = connectedHidDevice && (connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722);
-    if (!isKiwiMini && currentPreset.preamp !== 0) {
+    if (!isKiwiMini) {
       const preampByte = Math.round(currentPreset.preamp * 2.0) & 0xff;
       await sendHidReport(REPORT_ID, 0x66, CMD_WRITE, preampByte, 0, 0, 0);
     }
@@ -1100,13 +1101,13 @@ async function applyToDevice(commitFlash = false) {
       } catch (commitErr) {
         console.warn("Soft-reboot USB drop on commit:", commitErr);
       }
-      showToast(`PEQ burned to Slot ${slotId} NVRAM flash (Burn #${stats.total})! Awaiting USB re-enumeration...`);
+      showToast(`PEQ saved to Slot ${slotId} persistent NVRAM (Commit #${stats.total})! Awaiting USB re-enumeration...`);
 
       const reenumerated = await waitForUsbReenumeration(navigator.hid, KTMICRO_FILTERS, 4000, 200);
       isRebootingPostCommit = false;
       if (reenumerated) {
         await initializeDevice(reenumerated, true);
-        showToast(`Microcontroller online! Slot ${slotId} NVRAM verified.`);
+        showToast(`USB Re-enumeration Verified (Settings Committed to NVRAM). Full register verification is performed via "Read from DAC".`);
       }
     } else {
       showToast(`PEQ written to Slot ${slotId} live DSP RAM (Instant Audition)!`);
@@ -1309,7 +1310,7 @@ function restoreStockBackup() {
   currentPreset = {
     name: `Stock Factory Backup (Slot ${slotId})`,
     slug: `stock_backup_slot${slotId}`,
-    description: `Original factory DSP tuning captured prior to flash burn`,
+    description: `Original factory DSP tuning captured prior to NVRAM commit`,
     preamp: stock.preamp ?? 0.0,
     bands: stock.bands.map((b, i) => ({ ...b, index: i + 1 })),
   };
@@ -1317,7 +1318,7 @@ function restoreStockBackup() {
   buildControlsUI();
   renderCurve();
   triggerAutoApply();
-  showToast(`Stock factory tuning for Slot ${slotId} restored into editor! Click 'Burn to NVRAM Flash' to make permanent.`);
+  showToast(`Stock factory tuning for Slot ${slotId} restored into editor! Click 'Save to NVRAM' to make permanent.`);
 }
 
 export async function clearDeviceFlash() {

@@ -95,7 +95,7 @@ enum Commands {
         /// Preset name or path to JSON file
         preset: String,
 
-        /// Hardware slot ID (1-4, default 3)
+        /// Hardware slot ID (1-4, default 3). Slot 3 targets the standard customizable user slot (USER1) on JA11/KT02H20 devices (other slots hold read-only factory presets)
         #[arg(short, long, default_value_t = 3)]
         slot: u8,
 
@@ -112,12 +112,12 @@ enum Commands {
         dry_run: bool,
     },
 
-    /// Burn PEQ preset to hardware NVRAM flash (persists across unplugs)
+    /// Save PEQ preset to persistent NVRAM (persists across unplugs)
     Flash {
         /// Preset name or path to JSON file
         preset: String,
 
-        /// Hardware slot ID (1-4, default 3)
+        /// Hardware slot ID (1-4, default 3). Slot 3 targets the standard customizable user slot (USER1) on JA11/KT02H20 devices (other slots hold read-only factory presets)
         #[arg(short, long, default_value_t = 3)]
         slot: u8,
 
@@ -728,7 +728,7 @@ fn main() -> Result<()> {
                         );
                         p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
                     }
-                    println!("{}", format!("[FLASH] Burning preset '{}' to Moondrop FreeDSP NVRAM flash...", p.name).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent Moondrop FreeDSP NVRAM...", p.name).bold().cyan());
                     let report = encode_moondrop_report(&p.bands, p.preamp, true);
                     println!("  Generated 64-byte Moondrop flash report (0x21 COMMIT): {:02X?}", &report[..]);
                     println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
@@ -748,7 +748,7 @@ fn main() -> Result<()> {
                         );
                         p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
                     }
-                    println!("{}", format!("[FLASH] Burning preset '{}' to WalkPlay NVRAM flash...", p.name).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent WalkPlay NVRAM...", p.name).bold().cyan());
                     for (i, b) in p.bands.iter().enumerate() {
                         let eff_gain = if b.enabled { b.gain } else { 0.0 };
                         let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
@@ -777,7 +777,7 @@ fn main() -> Result<()> {
                         );
                         p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
                     }
-                    println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent NVRAM (Slot {})...", p.name, slot).bold().cyan());
                     let reports = encode_preset_payload(&p, v, p_id, slot, true, true)?;
                     println!("  Generated {} low-level HID reports (including 0x53 COMMIT).", reports.len());
                     for (i, r) in reports.iter().enumerate() {
@@ -822,7 +822,7 @@ fn main() -> Result<()> {
                         );
                         p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
                     }
-                    println!("{}", format!("[FLASH] Burning preset '{}' to Moondrop FreeDSP NVRAM flash...", p.name).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent Moondrop FreeDSP NVRAM...", p.name).bold().cyan());
                     println!(
                         "  Connecting to [{:04X}:{:04X}] {} (Moondrop 9-Band DSP)...",
                         dev_info.vid, dev_info.pid, dev_info.prod.bold()
@@ -837,7 +837,7 @@ fn main() -> Result<()> {
 
                     thread::sleep(Duration::from_millis(500));
 
-                    println!("{} PEQ curve successfully burned to Moondrop FreeDSP flash!", "[OK]".bold().green());
+                    println!("{} PEQ curve successfully saved to Moondrop FreeDSP NVRAM!", "[OK]".bold().green());
                 }
                 DeviceArch::WalkPlay { max_bands } => {
                     if p.bands.len() != max_bands {
@@ -849,7 +849,7 @@ fn main() -> Result<()> {
                         );
                         p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
                     }
-                    println!("{}", format!("[FLASH] Burning preset '{}' to WalkPlay NVRAM flash...", p.name).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent WalkPlay NVRAM...", p.name).bold().cyan());
                     println!(
                         "  Connecting to [{:04X}:{:04X}] {} (WalkPlay {}-Band DSP)...",
                         dev_info.vid, dev_info.pid, dev_info.prod.bold(), max_bands
@@ -877,7 +877,7 @@ fn main() -> Result<()> {
                         write_walkplay_report(&device, &c)?;
                     }
 
-                    println!("{} PEQ curve successfully burned to WalkPlay NVRAM flash!", "[OK]".bold().green());
+                    println!("{} PEQ curve successfully saved to WalkPlay NVRAM!", "[OK]".bold().green());
                 }
                 DeviceArch::KtMicro { clock_divisor_2x } => {
                     if p.bands.len() > 5 {
@@ -889,7 +889,7 @@ fn main() -> Result<()> {
                         p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
                     }
 
-                    println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
+                    println!("{}", format!("[FLASH] Saving preset '{}' to persistent NVRAM (Slot {})...", p.name, slot).bold().cyan());
                     println!(
                         "  Connecting to [{:04X}:{:04X}] {} (2X clock compensation: {})...",
                         dev_info.vid, dev_info.pid, dev_info.prod.bold(), clock_divisor_2x
@@ -908,7 +908,7 @@ fn main() -> Result<()> {
                     let mut ack = [0u8; 64];
                     let _ = device.read_timeout(&mut ack, 300);
 
-                    println!("{} PEQ curve successfully burned to hardware NVRAM flash! MCU soft-rebooting...", "[OK]".bold().green());
+                    println!("{} PEQ curve successfully saved to persistent NVRAM! MCU soft-rebooting...", "[OK]".bold().green());
                 }
             }
         }

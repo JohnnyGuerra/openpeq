@@ -10,7 +10,7 @@
     <img src="../media/dac-peq-web-flasher-demo.gif" alt="dac-peq-manager Web Flasher Demo" width="850">
   </a>
   <br>
-  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or burn to hardware NVRAM in &lt;50ms.</em>
+  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or save to persistent hardware NVRAM in &lt;50ms.</em>
 </p>
 
 A modular command-line tool, hardware DSP configuration suite, and host-side equalizer bridge that manages 5-band Parametric EQ (PEQ) across portable USB-C DACs and Tribrid In-Ear Monitors (IEMs).
@@ -60,7 +60,7 @@ A modular command-line tool, hardware DSP configuration suite, and host-side equ
 ### 2. Physical NVRAM Flash Health & Wear-Out Tracker
 * **Endurance Protection:** Microcontroller EEPROMs lack wear leveling (~10k-100k cycle limit).
 * **Wear Log & Alerts:** Persists timestamped write commits keyed by USB VID:PID in `~/.cache/dac-peq-manager/flash_history.json` and browser `localStorage`.
-* **Warning Safeguards:** Triggers cautionary alerts if flash writes exceed **10 burns in 24 hours** or **50 cumulative burns**, prompting users to audition in live RAM first.
+* **Warning Safeguards:** Triggers cautionary alerts if flash writes exceed **10 writes in 24 hours** or **50 cumulative writes**, prompting users to audition in live RAM first.
 * **CLI Flash Audit:** Inspect device write history anytime:
   ```bash
   dac-peq-manager flash-history
@@ -87,15 +87,26 @@ A modular command-line tool, hardware DSP configuration suite, and host-side equ
 
 ### 6. Event-Driven USB Re-Enumeration, Two-Way Readback & Factory Stock Backups
 * **Two-Way WebHID Register Readback:** Added **Read from DAC** (`#btnReadDac`) in the Web Flasher. Reads live hardware registers (`0x24` slot, `0x66` preamp, `0x11` DAC filter, `0x26`–`0x2F` biquads) into the interactive UI, and automatically updates the editor when switching hardware memory slots (`0x01`–`0x04`).
-* **Factory Stock Safety Snapshot & One-Click Restore:** Before burning to NVRAM flash, both the CLI (`flash`) and Web Flasher capture an automatic safety snapshot of the device's factory tuning (`~/.cache/dac-peq-manager/backups/` and `localStorage`). Users can export backups via **Save Backup JSON** (`#btnSavePreset`) and immediately restore factory settings using `dac-peq restore` or the Web Flasher's **Restore Stock Backup** (`#btnRestoreStock`) button.
+* **Factory Stock Safety Snapshot & One-Click Restore:** Before saving to persistent NVRAM, both the CLI (`flash`) and Web Flasher capture an automatic safety snapshot of the device's factory tuning (`~/.cache/dac-peq-manager/backups/` and `localStorage`). Users can export backups via **Save Backup JSON** (`#btnSavePreset`) and immediately restore factory settings using `dac-peq restore` or the Web Flasher's **Restore Stock Backup** (`#btnRestoreStock`) button.
 * **Real-Time Web Audio API Audition Chain:** The Pink Noise generator routes audio through an active Web Audio `preampGainNode` and `BiquadFilterNode` chain (`PK`, `LSQ`, `HSQ`) dynamically synchronized to slider and SVG drag movements. A built-in **Double-EQ Guard** automatically bypasses software filtering when a physical hardware DSP DAC is connected to avoid double-processing.
 * **Event-Driven Post-Commit Recovery:** Replaces fixed sleep delays after `0x53` NVRAM flash commits with active USB bus re-enumeration polling (`_wait_for_reenumeration` in Python and `waitForUsbReenumeration` in WebHID).
-* **Multi-Slot Hardware Memory (`0x01`–`0x04`):** Select between onboard KT02H20 memory slots `1` through `4` via `--slot / -s` in the CLI or the Memory Slot dropdown in the Web UI (defaulting to **Slot 3 (`0x03`)** for full backward compatibility).
+* **Multi-Slot Hardware Memory (`0x01`–`0x04`):** Select onboard KT02H20 memory slot via `--slot / -s` in the CLI or the Memory Slot dropdown in the Web UI. Slot 3 (`0x03`, USER1) is the standard customizable user slot on JA11 and KT02H20 hardware, while other slots house read-only vendor factory presets.
 * **9-Band Moondrop FreeDSP Support:** Full bidirectional read and write frame decoding (`0x31B2:0x0112`) and interactive 5-Band / 9-Band matrix switching in the Web Flasher.
 
 ### 7. Offline AutoEq Snapshot (Top 15 Reddit IEMs) & Mobile Android Advisory
 * **100% Offline Resilience & Self-Contained Wheel:** Bundles offline AutoEq fallback snapshots and acoustic presets directly inside package data (`src/dac_peq/data/`). Zero hardcoded paths; installs cleanly via `pip install .` on any machine. Top 15 Reddit `r/iems` & `r/inearfidelity` benchmarks (*Truthear Zero:RED, Truthear Hexa, Moondrop Chu II, Moondrop Aria, Moondrop Blessing 3, SIMGOT EW300, SIMGOT SuperMix 4, SIMGOT EM6L, Tangzu Wan'er S.G, 7Hz Zero:2, 7Hz Timeless, Kiwi Ears Cadenza, Letshuoer S12 Pro, BASN BmasterX 6, Sennheiser HD 600*) are instantly available when GitHub Raw is unreachable.
 * **Mobile Android WebHID Banner:** Automatically detects Android mobile browsers where WebHID is unsupported and provides a one-click **Export Wavelet GraphicEQ (.txt)** workflow.
+
+### 8. Verified Hardware Protocols, Known Vendor Limitations & Remediation Notes
+* **Verified Hardware Protocols vs. Known Vendor Limitations:**
+  * **KTMicro KT02H20 (e.g. Kiwi Ears Allegro Mini `0x31B2:0x0111`):** Verified 5-band PEQ biquads (`0x26`–`0x2F`) and Slot 3 selection (`0x24`). Guardrail enforced: register `0x66` (preamp) and register `0x11` (DAC reconstruction filter) are strictly omitted to prevent MCU attenuation register overwrites that lock out physical volume buttons on iOS/Android.
+  * **FiiO / JadeAudio JA11 (`0x2972:0x0102`):** Verified 5-band PEQ biquads, preamp register `0x66`, DAC reconstruction filters (`0x11`), and Slot 3 (USER1 custom profile). JA11 firmware reserves Slots 1, 2, and 4 for read-only vendor factory presets.
+  * **Moondrop FreeDSP / May Cable (`0x31B2:0x0112`):** Verified 9-band PEQ biquad framing and 64-byte report serialization.
+  * **WalkPlay DSP (`0x3302` / `0x0BDA`):** Verified multi-packet filter framing, global gain packets, and commit sequences.
+  * **Conexant CX31993 (`0x0572:0x1B08`):** Fixed mask ROM with OTP descriptors; non-writable DSP. Flash writes are strictly blocked to protect USB descriptors, safely routed to host-side DSP exporters (PipeWire, EqualizerAPO, Wavelet).
+* **v0.2.0 CLI Mock/Stub Issue Fix:** CLI commands now directly communicate with real hardware endpoints via `hidapi` by default, reserving the `--mock` / `--dry-run` flag strictly for headless CI and offline emulation without replacing physical device access.
+* **Preamp 0.0 dB Write Omission Fix:** Addressed an issue where 0.0 dB preamp settings were previously skipped (`abs() < 0.01`), preventing hardware registers from returning to unity gain if a prior negative preamp had been committed. For supported hardware (JA11), register `0x66` is now explicitly written with gain byte `0x00` while remaining safely bypassed on Allegro Mini.
+* **USB Re-Enumeration vs. Register Readback:** After saving to NVRAM (`0x53 COMMIT`), the suite monitors USB bus re-enumeration to verify MCU reboot. Deep register verification is explicitly performed using **Read from DAC** (`#btnReadDac` or `dac-peq read`).
 
 ---
 
@@ -173,7 +184,7 @@ Content: 0x4B   Reg  0x00  0x00  0x00   CMD  0x00   D0    D1    D2    D3
 | `0x2E` | Band 5 Gain & Frequency | `[Gain_Lo, Gain_Hi, Freq_Lo, Freq_Hi]` | Band 5 |
 | `0x2F` | Band 5 Q & Filter Type | `[Q_Lo, Q_Hi, TypeByte, 0x00]` | Band 5 |
 | `0x66` | Global Preamp Gain | `[Preamp_Byte, 0x00, 0x00, 0x00]` | Signed int8 (-12 to +12 dB) |
-| `0x00` | NVRAM Flash Commit | `[0x00, 0x00, 0x00, 0x00]` with `CMD=0x53` | Burns RAM registers into flash |
+| `0x00` | NVRAM Flash Commit | `[0x00, 0x00, 0x00, 0x00]` with `CMD=0x53` | Saves RAM registers into persistent NVRAM |
 
 ### CX31993 Safety Guard
 
@@ -228,7 +239,7 @@ dac-peq-manager apply bmasterx6
 dac-peq-manager apply ew300-silver --mock
 ```
 
-### Burn to Onboard NVRAM (`flash`)
+### Save to Onboard Persistent NVRAM (`flash`)
 Permanently commit the PEQ curve and preamp to the DAC's onboard non-volatile memory:
 ```bash
 dac-peq-manager flash bmasterx6
@@ -274,7 +285,7 @@ Switch the KT02H20 hardware anti-aliasing reconstruction filter:
 # Set in live RAM (FAST-LL, FAST-PC, SLOW-LL, SLOW-PC, NON-OS)
 dac-peq-manager filter FAST-PC
 
-# Burn filter preference to NVRAM permanently:
+# Save filter preference to persistent NVRAM permanently:
 dac-peq-manager filter NON-OS --flash
 ```
 
@@ -333,7 +344,7 @@ dac-peq-manager db pull "Simgot Audio EW300 (gold)" --plot
 # Pull and audition immediately in live DSP RAM:
 dac-peq-manager db pull "Moondrop Aria" --apply
 
-# Pull and burn directly to persistent NVRAM flash:
+# Pull and save directly to persistent NVRAM:
 dac-peq-manager db pull "Sennheiser HD 600" --flash
 ```
 

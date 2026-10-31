@@ -138,7 +138,7 @@ pub fn encode_preset_payload(
     let mut reports = Vec::new();
 
     // 1. Digital preamp (Register 0x66) - Omitted on Allegro Mini to prevent volume lockout
-    if !is_allegro_mini && preset.preamp.abs() > 0.01 {
+    if !is_allegro_mini {
         let gain_byte = (preset.preamp * 2.0).round() as i8 as u8;
         reports.push(encode_write_register(REG_PREAMP, [gain_byte, 0x00, 0x00, 0x00]));
     }

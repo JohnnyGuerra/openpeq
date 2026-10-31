@@ -14,12 +14,12 @@
     <img src="media/dac-peq-web-flasher-demo.gif" alt="OpenPEQ Web Flasher Demo" width="850">
   </a>
   <br>
-  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or burn to hardware NVRAM in &lt;50ms.</em>
+  <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or save to persistent hardware NVRAM in &lt;50ms.</em>
 </p>
 
 An open-source hardware DSP flashing suite, WebHID browser flasher, and host equalizer bridge for portable USB-C DAC dongles, DSP upgrade cables, and In-Ear Monitors (IEMs).
 
-Burn custom Parametric EQ profiles (including **AutoEq** targets from squig.link) directly into onboard non-volatile hardware memory (NVRAM). Settings persist natively across **iPhones, Android, Macs, Windows, Linux PCs, iPads, and gaming consoles** without running any background apps.
+Save custom Parametric EQ profiles (including **AutoEq** targets from squig.link) directly into onboard non-volatile hardware memory (NVRAM). Settings persist natively across **iPhones, Android, Macs, Windows, Linux PCs, iPads, and gaming consoles** without running any background apps.
 
 ---
 
@@ -32,7 +32,7 @@ Run the full hardware flasher directly in your browser via WebHID (Chrome, Brave
 * 100% Client-Side & Private (no audio or device data leaves your browser).
 * Real-time Interactive SVG Biquad Curve with draggable band handles.
 * AutoEq Database Integration (search over 5,000+ headphone & IEM measurements).
-* 2-Way Hardware Readback & Live Audition in RAM before burning to flash.
+* 2-Way Hardware Readback & Live Audition in RAM before saving to persistent NVRAM.
 * Built-in Safety Guardrails: NVRAM Flash Wear-Out Tracker & Conexant fixed mask ROM protection.
 
 > [!TIP]
@@ -69,7 +69,7 @@ See **[COMPATIBILITY.md](./COMPATIBILITY.md)** for our full breakdown of all **3
 | Status | Category | Highlighted Devices |
 | :---: | :--- | :--- |
 | 🟢 | **Hardware Verified & Tested** | **Tanchjim SPACE Pro**, **Kiwi Ears Allegro Mini**, **Moondrop FreeDSP / May Cable**, **TANGZU Wan'er S.G II Cable**, **BASN BmasterX 6 Plug**, **TTGK CX31993**, **Rythflo WD01**, **Bluetrum AB13X** |
-| 🟡 | **Protocol Complete (Awaiting Tester)** | **TRUTHEAR KEYX**, **CrinEar Protocol Micro & Max**, **Moondrop Chu II DSP**, **Tanchjim ONE DSP**, **FiiO / JadeAudio JA11**, **Fosi Audio DS3**, **FiiO LS-TC2**, **Celest Wyvern Abyss**, **Simgot EW300 DSP** |
+| 🟡 | **Protocol Implemented (Awaiting Silicon Tester)** | **TRUTHEAR KEYX**, **CrinEar Protocol Micro & Max**, **Moondrop Chu II DSP**, **Tanchjim ONE DSP**, **FiiO / JadeAudio JA11**, **Fosi Audio DS3**, **FiiO LS-TC2**, **Celest Wyvern Abyss**, **Simgot EW300 DSP** |
 | 🔵 | **Protocol In Development (Help Wanted)** | **FiiO KA15**, **FiiO KA17**, **FiiO BTR13**, **ddHiFi Memory DSP** |
 | 🔴 | **Fixed Mask ROM (Host DSP & Qudelix Interop)** | **Qudelix-5K Profile Sync**, **Conexant CX31993 (TTGK, JCALLY JM6 Pro)**, **Apple USB-C A2049**, **Moondrop Dawn Pro** |
 
@@ -112,7 +112,7 @@ openpeq scan
 # Audition a preset in live RAM (instant, zero flash wear)
 openpeq apply bmasterx6
 
-# Permanently burn preset into hardware NVRAM
+# Permanently save preset into hardware NVRAM
 openpeq flash bmasterx6
 
 # Read active PEQ bands directly from DAC hardware
@@ -121,7 +121,7 @@ openpeq read
 # Factory reset NVRAM and recover volume control
 openpeq reset -y
 
-# Check flash memory burn endurance history
+# Check flash memory write endurance history
 openpeq flash-history
 
 # Export 10-band target profile for software equalizers
@@ -141,7 +141,7 @@ The Web Flasher runs client-side in desktop Chromium browsers (**Google Chrome, 
 | **Windows** (10 & 11) | **Zero (Plug & Play)** | ❌ No | Works out of the box. *Note:* Close any OEM companion software (e.g. Tanchjim PC app) if running, as Windows grants background apps exclusive HID locks. |
 | **ChromeOS** (Chromebooks) | **Zero (Plug & Play)** | ❌ No | Works natively in the ChromeOS browser. |
 | **Linux** (Arch, Ubuntu, Fedora, Debian) | **One-time udev rule** | ❌ No (after rule) | Linux restricts `/dev/hidraw*` to root by default. Run our one-line [udev setup](#-linux-webhid--udev-setup) to grant desktop seat access (`uaccess`). |
-| **iOS / iPadOS / Android** | **Burn once from PC** | N/A | Apple WebKit does not expose WebHID to mobile browsers. Burn your EQ curve once from a PC/Mac/Chromebook, and it remains permanently active in the DAC hardware on your phone. |
+| **iOS / iPadOS / Android** | **Save once from PC** | N/A | Apple WebKit does not expose WebHID to mobile browsers. Save your EQ curve once from a PC/Mac/Chromebook, and it remains permanently active in the DAC hardware on your phone. |
 
 ---
 

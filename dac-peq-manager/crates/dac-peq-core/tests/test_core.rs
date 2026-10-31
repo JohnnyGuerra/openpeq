@@ -118,6 +118,41 @@ fn test_allegro_mini_guardrail_omits_preamp_register_0x66() {
 }
 
 #[test]
+fn test_ktmicro_zero_db_preamp_writes_register_0x66() {
+    let preset = PeqPreset {
+        name: "Zero Preamp Test".into(),
+        description: None,
+        preamp: 0.0,
+        slot_id: Some(3),
+        bands: vec![BiquadBand::new(FilterType::Peaking, 1000.0, 1.0, 1.0)],
+        full_bands: None,
+    };
+
+    // For non-Allegro hardware (FiiO JA11 0x2972:0x0102), register 0x66 must be emitted with gain byte 0x00
+    let reports = encode_preset_payload(&preset, 0x2972, 0x0102, 3, false, true)
+        .expect("Payload generation failed");
+
+    let preamp_rpt = reports
+        .iter()
+        .find(|r| r.as_bytes()[1] == REG_PREAMP)
+        .expect("Register 0x66 was not emitted for FiiO JA11 with 0.0 dB preamp!");
+
+    let bytes = preamp_rpt.as_bytes();
+    assert_eq!(bytes[0], RPT_ID);
+    assert_eq!(bytes[1], REG_PREAMP);
+    assert_eq!(bytes[5], CMD_WRITE);
+    assert_eq!(bytes[7], 0x00, "0.0 dB preamp must emit gain byte 0x00");
+
+    // For Allegro Mini (0x31B2:0x0111), register 0x66 must still be omitted
+    let allegro_reports = encode_preset_payload(&preset, 0x31B2, 0x0111, 3, true, true)
+        .expect("Payload generation failed");
+    assert!(
+        !allegro_reports.iter().any(|r| r.as_bytes()[1] == REG_PREAMP),
+        "Register 0x66 must be omitted on Allegro Mini even with 0.0 dB preamp!"
+    );
+}
+
+#[test]
 fn test_exporters_pipewire_and_apo() {
     let mut disabled_band = BiquadBand::new(FilterType::HighShelf, 10000.0, 3.0, 0.71);
     disabled_band.enabled = false;

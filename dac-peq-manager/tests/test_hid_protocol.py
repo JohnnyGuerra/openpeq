@@ -256,3 +256,62 @@ def test_ktmicro_disabled_bands_muted():
         b3_raw = dev._dev.ram_registers[0x2A]
         gain_b3 = b3_raw[6] | (b3_raw[7] << 8)
         assert gain_b3 == 0
+
+        # Preamp 0.0 dB is written to register 0x66
+        assert dev.REG_PREAMP in dev._dev.ram_registers
+        assert dev._dev.ram_registers[dev.REG_PREAMP][6] == 0x00
+
+
+def test_ktmicro_zero_db_preamp_packet_included_for_ja11():
+    """Verify that when preamp is 0.0 dB, register 0x66 is included in the output packets for JA11/KTMicro,
+    and omitted for Kiwi Ears Allegro Mini."""
+    preset = {
+        "name": "zero_preamp_test",
+        "preamp": 0.0,
+        "bands": [
+            {"index": i, "type": "PK", "freq": 1000.0, "gain": 0.0, "q": 1.0}
+            for i in range(1, 6)
+        ],
+    }
+
+    # 1. JA11 (0x2972)
+    dev_ja11 = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True)
+    sent_packets_ja11 = []
+    with dev_ja11:
+        dev_ja11._dev.ram_registers.clear()
+        orig_send = dev_ja11._send_packet
+
+        def spy_send(reg, cmd, d0=0, d1=0, d2=0, d3=0):
+            sent_packets_ja11.append((reg, cmd, d0, d1, d2, d3))
+            return orig_send(reg, cmd, d0, d1, d2, d3)
+
+        dev_ja11._send_packet = spy_send
+
+        dev_ja11.apply_preset(preset, commit_flash=False)
+
+        preamp_pkts = [p for p in sent_packets_ja11 if p[0] == dev_ja11.REG_PREAMP]
+        assert len(preamp_pkts) == 1, "Register 0x66 packet was not sent for JA11 with 0.0 dB preamp"
+        assert preamp_pkts[0][1] == dev_ja11.CMD_WRITE
+        assert preamp_pkts[0][2] == 0x00, "Register 0x66 data byte must be 0x00 for 0.0 dB preamp"
+        assert dev_ja11.REG_PREAMP in dev_ja11._dev.ram_registers
+        assert dev_ja11._dev.ram_registers[dev_ja11.REG_PREAMP][6] == 0x00
+
+    # 2. Allegro Mini (0x31B2)
+    dev_allegro = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x0111, use_mock=True)
+    sent_packets_allegro = []
+    with dev_allegro:
+        dev_allegro._dev.ram_registers.clear()
+        orig_send_allegro = dev_allegro._send_packet
+
+        def spy_send_allegro(reg, cmd, d0=0, d1=0, d2=0, d3=0):
+            sent_packets_allegro.append((reg, cmd, d0, d1, d2, d3))
+            return orig_send_allegro(reg, cmd, d0, d1, d2, d3)
+
+        dev_allegro._send_packet = spy_send_allegro
+
+        dev_allegro.apply_preset(preset, commit_flash=False)
+
+        preamp_pkts_allegro = [p for p in sent_packets_allegro if p[0] == dev_allegro.REG_PREAMP]
+        assert len(preamp_pkts_allegro) == 0, "Register 0x66 must NOT be sent for Allegro Mini"
+        assert dev_allegro.REG_PREAMP not in dev_allegro._dev.ram_registers
+

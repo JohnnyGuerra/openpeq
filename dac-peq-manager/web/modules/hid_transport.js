@@ -115,11 +115,22 @@ export function hasStockBackup(dev, slotId = 3, storage = globalThis.localStorag
 }
 
 // ── Firmware Clock Divisor Quirk Prober ───────────────────────────────────────
+// NOTE: The W3C WebHID standard HIDDevice interface exposes vendorId, productId,
+// and productName, but does NOT expose bcdDevice or deviceVersion.
+// Therefore, WebHID cannot inspect the device firmware revision directly.
+// We apply static heuristics based on VID/PID/product name:
+//   - Moondrop FreeDSP (0x31b2:0x0112): Standard clocking (requiresCompensate2X = false).
+//   - FiiO JA11 (0x2972): Production firmware (v1.8+) corrected the clock bug internally,
+//     so default to native clocking (requiresCompensate2X = false).
+//   - Kiwi Ears Allegro Mini / generic KT02H20 (0x31b2:0x0111, 0x0bda:0x0023, "allegro"):
+//     Default to requiresCompensate2X = true.
+// For all KT02H20 devices, the web UI provides an explicit "2X Clock Divisor (KT02H20)"
+// checkbox (#chkCompensate2X) so the user can override this heuristic if their specific
+// firmware revision behaves differently.
 export function detectFirmwareQuirks(dev) {
   if (!dev) return { requiresCompensate2X: false, reason: "No device" };
   const vid = dev.vendorId || 0;
   const pid = dev.productId || 0;
-  const version = typeof dev.deviceVersion === "number" ? dev.deviceVersion : 0x0100;
   const prodName = (dev.productName || "").toLowerCase();
 
   if (isMoondropFreeDsp(dev)) {
@@ -129,19 +140,20 @@ export function detectFirmwareQuirks(dev) {
     };
   }
 
-  // FiiO JA11 firmware v1.8+ (deviceVersion >= 0x0180) has 2X clock divisor bug patched upstream
-  if (vid === 0x2972 && version >= 0x0180) {
+  // FiiO JA11 (VID 0x2972): Firmware v1.8+ has the 2X clock divisor bug patched upstream.
+  // Because WebHID lacks bcdDevice, default to native clocking; user can toggle checkbox if on legacy firmware.
+  if (vid === 0x2972) {
     return {
       requiresCompensate2X: false,
-      reason: `FiiO JA11 firmware v${(version / 256).toFixed(1)}: Native clocking (no 2X divisor needed)`,
+      reason: "FiiO JA11: Native clocking (firmware v1.8+ default; toggle via checkbox if running legacy firmware)",
     };
   }
 
-  // Generic KT02H20 / WalkPlay (VID 0x31b2, 0x0bda) or older bcdDevice <= 0x0100
-  if (vid === 0x31b2 || (vid === 0x0bda && pid === 0x0023) || version <= 0x0100 || prodName.includes("allegro")) {
+  // Generic KT02H20 / WalkPlay (VID 0x31b2, 0x0bda:0x0023) or Allegro Mini
+  if (vid === 0x31b2 || (vid === 0x0bda && pid === 0x0023) || prodName.includes("allegro")) {
     return {
       requiresCompensate2X: true,
-      reason: `KT02H20 v${(version / 256).toFixed(1)} quirk: 48kHz clock requires 2X divisor compensation`,
+      reason: "KT02H20 quirk (Allegro Mini): 48kHz clock requires 2X divisor compensation (toggleable via checkbox)",
     };
   }
 
