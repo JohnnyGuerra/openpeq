@@ -11,4 +11,4 @@ version = "0.2.0"
 authors = ["Johnny Guerra"]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/JohnnyGuerra/dac-peq-manager"
+repository = "https://github.com/JohnnyGuerra/openpeq"

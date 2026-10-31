@@ -1,17 +1,17 @@
-# `dac-peq-manager` (Hardware DSP Flasher & Host PEQ Suite)
+# `OpenPEQ` (Hardware DSP Flasher & Web Equalizer Suite)
 
-[![CI](https://github.com/JohnnyGuerra/dac-peq-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnnyGuerra/dac-peq-manager/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/JohnnyGuerra/dac-peq-manager?color=10b981&label=Release&style=flat-square)](https://github.com/JohnnyGuerra/dac-peq-manager/releases)
-[![Stars](https://img.shields.io/github/stars/JohnnyGuerra/dac-peq-manager?style=flat-square&color=38bdf8)](https://github.com/JohnnyGuerra/dac-peq-manager/stargazers)
+[![CI](https://github.com/JohnnyGuerra/openpeq/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnnyGuerra/openpeq/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/JohnnyGuerra/openpeq?color=10b981&label=Release&style=flat-square)](https://github.com/JohnnyGuerra/openpeq/releases)
+[![Stars](https://img.shields.io/github/stars/JohnnyGuerra/openpeq?style=flat-square&color=38bdf8)](https://github.com/JohnnyGuerra/openpeq/stargazers)
 [![Growth Dashboard](https://img.shields.io/badge/Analytics-Growth_Dashboard-10b981?style=flat-square&logo=github)](./metrics/GROWTH.md)
-[![WebHID Flasher](https://img.shields.io/badge/Web_Flasher-Live_on_Pages-3b82f6?style=flat-square&logo=googlechrome&logoColor=white)](https://johnnyguerra.github.io/dac-peq-manager/)
-[![Rust WASM](https://img.shields.io/badge/Engine-Rust_WASM-f97316?style=flat-square&logo=rust&logoColor=white)](https://github.com/JohnnyGuerra/dac-peq-manager)
+[![WebHID Flasher](https://img.shields.io/badge/Web_Flasher-Live_on_Pages-3b82f6?style=flat-square&logo=googlechrome&logoColor=white)](https://johnnyguerra.github.io/openpeq/)
+[![Rust WASM](https://img.shields.io/badge/Engine-Rust_WASM-f97316?style=flat-square&logo=rust&logoColor=white)](https://github.com/JohnnyGuerra/openpeq)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Hardware Support Matrix](https://img.shields.io/badge/Hardware%20Matrix-35%20DACs-orange.svg?style=flat-square)](./COMPATIBILITY.md)
 
 <p align="center">
-  <a href="https://johnnyguerra.github.io/dac-peq-manager/">
-    <img src="media/dac-peq-web-flasher-demo.gif" alt="dac-peq-manager Web Flasher Demo" width="850">
+  <a href="https://johnnyguerra.github.io/openpeq/">
+    <img src="media/dac-peq-web-flasher-demo.gif" alt="OpenPEQ Web Flasher Demo" width="850">
   </a>
   <br>
   <em>⚡ Live Web Flasher in action: Drag real-time biquad curve handles, audition in volatile RAM, or burn to hardware NVRAM in &lt;50ms.</em>
@@ -27,7 +27,7 @@ Burn custom Parametric EQ profiles (including **AutoEq** targets from squig.link
 
 Run the full hardware flasher directly in your browser via WebHID (Chrome, Brave, Edge):
 
-👉 **[Launch Web Flasher (GitHub Pages)](https://johnnyguerra.github.io/dac-peq-manager/)**
+👉 **[Launch Web Flasher (GitHub Pages)](https://johnnyguerra.github.io/openpeq/)**
 
 * 100% Client-Side & Private (no audio or device data leaves your browser).
 * Real-time Interactive SVG Biquad Curve with draggable band handles.
@@ -98,8 +98,8 @@ See **[COMPATIBILITY.md](./COMPATIBILITY.md)** for our full breakdown of all **3
 ### 1. Installation
 
 ```bash
-git clone https://github.com/johnnyguerra/dac-peq-manager.git
-cd dac-peq-manager
+git clone https://github.com/JohnnyGuerra/openpeq.git
+cd openpeq
 pip install -e dac-peq-manager/
 ```
 
@@ -107,26 +107,26 @@ pip install -e dac-peq-manager/
 
 ```bash
 # Scan and inspect connected USB DACs
-dac-peq-manager scan
+openpeq scan
 
 # Audition a preset in live RAM (instant, zero flash wear)
-dac-peq-manager apply bmasterx6
+openpeq apply bmasterx6
 
 # Permanently burn preset into hardware NVRAM
-dac-peq-manager flash bmasterx6
+openpeq flash bmasterx6
 
 # Read active PEQ bands directly from DAC hardware
-dac-peq-manager read
+openpeq read
 
 # Factory reset NVRAM and recover volume control
-dac-peq-manager reset -y
+openpeq reset -y
 
 # Check flash memory burn endurance history
-dac-peq-manager flash-history
+openpeq flash-history
 
 # Export 10-band target profile for software equalizers
-dac-peq-manager export-pipewire bmasterx6 --full-target
-dac-peq-manager export-apo bmasterx6 --full-target
+openpeq export-pipewire bmasterx6 --full-target
+openpeq export-apo bmasterx6 --full-target
 ```
 
 ---
@@ -181,32 +181,32 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 We need your help testing devices and capturing USB packets!
 * Read our **[CONTRIBUTING.md](./CONTRIBUTING.md)** guide to see how to capture WebHID sendReport logs in Chrome DevTools or Wireshark.
-* Own a device marked **🟡**? Submit a **[Hardware Verification Report](https://github.com/johnnyguerra/dac-peq-manager/issues/new?template=dac_hardware_report.yml)**!
-* Want support for a new DAC? Open a **[New DAC Support Request](https://github.com/johnnyguerra/dac-peq-manager/issues/new?template=new_dac_request.yml)**.
+* Own a device marked **🟡**? Submit a **[Hardware Verification Report](https://github.com/JohnnyGuerra/openpeq/issues/new?template=dac_hardware_report.yml)**!
+* Want support for a new DAC? Open a **[New DAC Support Request](https://github.com/JohnnyGuerra/openpeq/issues/new?template=new_dac_request.yml)**.
 
 ---
 
 ## 📜 License & Disclaimers
 
 * **License:** [MIT License](./LICENSE)
-* **Disclaimer:** `dac-peq-manager` is an independent, community-driven open-source project. Not affiliated with KTMicro, Kiwi Ears, FiiO, Moondrop, Tanchjim, or Truthear.
+* **Disclaimer:** `OpenPEQ` is an independent, community-driven open-source project. Not affiliated with KTMicro, Kiwi Ears, FiiO, Moondrop, Tanchjim, or Truthear.
 
 ---
 
 ## ✒️ Citation & Attribution
 
-If you use `dac-peq-manager`, its reverse-engineered KTMicro/WalkPlay USB register maps, or the `dac-peq-core` Rust engine in your own project, fork, or research, please provide attribution:
+If you use `OpenPEQ`, its reverse-engineered KTMicro/WalkPlay USB register maps, or the `dac-peq-core` Rust engine in your own project, fork, or research, please provide attribution:
 
 ```text
-Guerra, J. (2026). dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs.
-GitHub: https://github.com/JohnnyGuerra/dac-peq-manager
+Guerra, J. (2026). OpenPEQ: Universal hardware DSP flasher & Web equalizer for portable USB-C DACs and IEMs.
+GitHub: https://github.com/JohnnyGuerra/openpeq
 ```
 
 ```bibtex
-@software{guerra2026dacpeq,
+@software{guerra2026openpeq,
   author = {Johnny Guerra},
-  title = {dac-peq-manager: Open-source WebHID hardware PEQ flasher & host DSP suite for portable USB-C DACs},
-  url = {https://github.com/JohnnyGuerra/dac-peq-manager},
+  title = {OpenPEQ: Universal hardware DSP flasher & Web equalizer for portable USB-C DACs and IEMs},
+  url = {https://github.com/JohnnyGuerra/openpeq},
   year = {2026}
 }
 ```

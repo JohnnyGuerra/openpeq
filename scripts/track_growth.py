@@ -14,7 +14,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_DEFAULT = "JohnnyGuerra/dac-peq-manager"
+REPO_DEFAULT = "JohnnyGuerra/openpeq"
 BASE_DIR = Path(__file__).resolve().parent.parent
 METRICS_DIR = BASE_DIR / "metrics"
 

@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dac-peq-manager"
+name = "openpeq"
 version = "0.2.0"
-description = "Hardware DSP Flasher & Host PEQ Suite for Portable USB-C DACs & Tribrid IEMs"
+description = "Universal Hardware DSP Flasher & Web Equalizer for Portable USB-C DACs and IEMs"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -13,20 +13,21 @@ authors = [
     { name = "Antigravity Pair Programmer" }
 ]
 keywords = [
+    "openpeq",
     "dsp",
     "peq",
     "parametric-eq",
     "ktmicro",
     "kt02h20",
+    "walkplay",
+    "crinear",
     "kiwi-ears",
     "allegro-mini",
-    "basn-bmasterx6",
-    "jcally-jm6pro",
-    "cx31993",
-    "pipewire",
-    "equalizer-apo",
-    "wavelet",
+    "fiio-ja11",
+    "moondrop-freedsp",
+    "autoeq",
     "iem",
+    "audiophile",
     "audio"
 ]
 dependencies = [
@@ -36,6 +37,7 @@ dependencies = [
 ]
 
 [project.scripts]
+openpeq = "dac_peq.cli:main"
 dac-peq = "dac_peq.cli:main"
 dac-peq-manager = "dac_peq.cli:main"
 
