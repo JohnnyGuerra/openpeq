@@ -372,7 +372,8 @@ def cmd_flash(
         total_burns = tracker.record_commit(dev_key, preset_name=preset.get("name"))
         console.print(
             f"[bold green][OK] PEQ curve successfully burned to hardware NVRAM flash![/bold green] (Commit #{total_burns})\n"
-            "[cyan]Settings are now non-volatile and will persist across unplugging, host swaps, and mobile devices.[/cyan]"
+            "[cyan]Settings are now non-volatile and will persist across unplugging, host swaps, and mobile devices.[/cyan]\n\n"
+            "[dim]Enjoying dac-peq-manager? ⭐ Star the project on GitHub: [link=https://github.com/JohnnyGuerra/dac-peq-manager]https://github.com/JohnnyGuerra/dac-peq-manager[/link][/dim]"
         )
     except (DeviceSecurityException, ValueError) as e:
         console.print(f"[bold red][BLOCKED][/bold red] {e}")

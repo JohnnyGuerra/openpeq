@@ -534,6 +534,32 @@ header {
   flex-shrink: 0;
 }
 
+.star-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.star-link-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--accent-yellow);
+  color: #fef08a;
+  transform: translateY(-1px);
+}
+
+.star-link-btn svg {
+  color: var(--accent-yellow);
+}
+
 .generator-guide-dialog {
   border: 1px solid rgba(56, 189, 248, 0.35);
   border-radius: var(--radius-md);
