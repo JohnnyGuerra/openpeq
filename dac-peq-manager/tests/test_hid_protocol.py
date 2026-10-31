@@ -13,17 +13,20 @@ from dac_peq.transport import get_dsp_device
 
 
 def test_allegro_mini_guardrail_properties():
-    """Verify is_allegro_mini_or_no_pregain on 0x31B2 devices and JA11."""
+    """Verify is_allegro_mini_or_no_pregain and supports_dac_filter on 0x31B2 devices and JA11."""
     dev_allegro = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x0111, use_mock=True)
     assert dev_allegro.is_allegro_mini_or_no_pregain() is True
+    assert dev_allegro.supports_dac_filter() is False
     assert dev_allegro._vid == 0x31B2
 
     dev_ja11 = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True)
     assert dev_ja11.is_allegro_mini_or_no_pregain() is False
+    assert dev_ja11.supports_dac_filter() is True
     assert dev_ja11._vid == 0x2972
 
     dev_custom_nopregain = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True, no_pregain=True)
     assert dev_custom_nopregain.is_allegro_mini_or_no_pregain() is True
+    assert dev_custom_nopregain.supports_dac_filter() is False
 
 
 def test_allegro_mini_skips_register_0x66_in_apply_preset():
@@ -141,3 +144,115 @@ def test_scan_candidate_exclusions():
     assert not is_ktmicro_candidate({"vendor_id": 0x2972, "product_id": 0x0104})  # KA15
     assert not is_ktmicro_candidate({"vendor_id": 0x2972, "product_id": 0x0105})  # KA17
     assert not is_ktmicro_candidate({"vendor_id": 0x2972, "product_id": 0x0107})  # BTR13
+
+
+def test_non_fiio_ktmicro_allows_preamp_blocks_dac_filter():
+    """Verify non-FiiO KTMicro (e.g. JCALLY 0x1908:0x2070) can read/write preamp 0x66,
+    is blocked from writing 0x11 in set_dac_filter, and skips reading 0x11 in read_current_peq,
+    while FiiO JA11 (0x2972:0x0102) reads and writes 0x11 normally."""
+    preset = {
+        "name": "test_preset",
+        "preamp": -2.5,
+        "bands": [
+            {"index": 1, "type": "PK", "freq": 100.0, "gain": 1.0, "q": 1.0},
+            {"index": 2, "type": "PK", "freq": 250.0, "gain": 0.0, "q": 1.0},
+            {"index": 3, "type": "PK", "freq": 1000.0, "gain": -1.0, "q": 1.0},
+            {"index": 4, "type": "PK", "freq": 4000.0, "gain": 2.0, "q": 1.0},
+            {"index": 5, "type": "PK", "freq": 8000.0, "gain": 0.0, "q": 1.0},
+        ],
+    }
+
+    # 1. Non-FiiO KTMicro device: JCALLY JM20 (0x1908:0x2070)
+    dev_jcally = KTMicroDSPDevice(vendor_id=0x1908, product_id=0x2070, use_mock=True)
+    assert dev_jcally.supports_dac_filter() is False
+    assert dev_jcally.is_allegro_mini_or_no_pregain() is False
+
+    with dev_jcally:
+        # Preamp 0x66 write succeeds on non-Allegro KTMicro hardware
+        dev_jcally._dev.ram_registers.clear()
+        dev_jcally.apply_preset(preset, commit_flash=False)
+        assert dev_jcally.REG_PREAMP in dev_jcally._dev.ram_registers
+        # Encoded: round(-2.5 * 2) = -5 -> 0xFB (251)
+        assert dev_jcally._dev.ram_registers[dev_jcally.REG_PREAMP][6] == 0xFB
+
+        # DAC filter write 0x11 is strictly blocked
+        with pytest.raises(ValueError) as excinfo:
+            dev_jcally.set_dac_filter("SLOW-LL")
+        msg = str(excinfo.value)
+        assert "0x11" in msg
+        assert "JA11" in msg
+        assert "0x2972" in msg
+        assert "volume" in msg.lower()
+        assert dev_jcally.REG_DAC_FILTER not in dev_jcally._dev.ram_registers
+
+        # Preamp 0x66 read succeeds, while DAC filter 0x11 read is skipped
+        dev_jcally._dev.ram_registers[0x66] = [0x66, 0, 0, 0, 0x57, 0, 0xF6, 0, 0, 0]  # -5.0 dB
+        dev_jcally._dev.ram_registers[0x11] = [0x11, 0, 0, 0, 0x57, 0, 0x03, 0, 0, 0]  # SLOW-LL
+
+        sent_regs = []
+        orig_send = dev_jcally._send_packet
+
+        def spy_send(reg, cmd, d0=0, d1=0, d2=0, d3=0):
+            sent_regs.append(reg)
+            return orig_send(reg, cmd, d0, d1, d2, d3)
+
+        dev_jcally._send_packet = spy_send
+
+        state_jcally = dev_jcally.read_current_peq()
+        assert state_jcally["preamp"] == -5.0
+        assert state_jcally["dac_filter"] is None
+        # Register 0x11 must not have been polled
+        assert dev_jcally.REG_DAC_FILTER not in sent_regs
+        # Register 0x66 must have been polled
+        assert dev_jcally.REG_PREAMP in sent_regs
+
+    # 2. FiiO JA11 (0x2972:0x0102) supports both preamp 0x66 and DAC filter 0x11
+    dev_ja11 = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True)
+    assert dev_ja11.supports_dac_filter() is True
+    assert dev_ja11.is_allegro_mini_or_no_pregain() is False
+
+    with dev_ja11:
+        dev_ja11._dev.ram_registers.clear()
+        dev_ja11.apply_preset(preset, commit_flash=False)
+        assert dev_ja11.REG_PREAMP in dev_ja11._dev.ram_registers
+
+        dev_ja11.set_dac_filter("SLOW-PC", commit_flash=False)
+        assert dev_ja11.REG_DAC_FILTER in dev_ja11._dev.ram_registers
+        assert dev_ja11._dev.ram_registers[dev_ja11.REG_DAC_FILTER][6] == dev_ja11.DAC_FILTERS["SLOW-PC"]
+
+        state_ja11 = dev_ja11.read_current_peq()
+        assert state_ja11["dac_filter"] == "SLOW-PC"
+        assert state_ja11["preamp"] == -2.5
+
+
+def test_ktmicro_disabled_bands_muted():
+    """Verify that disabled bands (enabled: False) are muted to 0.0 dB gain in KTMicro apply_preset."""
+    dev = KTMicroDSPDevice(vendor_id=0x2972, product_id=0x0102, use_mock=True)
+    with dev:
+        dev._dev.ram_registers.clear()
+        preset = {
+            "name": "disabled_test",
+            "preamp": 0.0,
+            "bands": [
+                {"index": 1, "type": "PK", "freq": 100.0, "gain": 4.0, "q": 1.0, "enabled": False},
+                {"index": 2, "type": "PK", "freq": 250.0, "gain": 2.0, "q": 1.0, "enabled": True},
+                {"index": 3, "type": "PK", "freq": 1000.0, "gain": -3.0, "q": 1.0, "enabled": False},
+                {"index": 4, "type": "PK", "freq": 4000.0, "gain": 1.5, "q": 1.0, "enabled": True},
+                {"index": 5, "type": "PK", "freq": 8000.0, "gain": -2.0, "q": 1.0, "enabled": True},
+            ],
+        }
+        dev.apply_preset(preset, commit_flash=False)
+        # Band 1 (0x26): disabled, gain must be 0
+        b1_raw = dev._dev.ram_registers[0x26]
+        gain_b1 = b1_raw[6] | (b1_raw[7] << 8)
+        assert gain_b1 == 0
+
+        # Band 2 (0x28): enabled, gain must be 20 (+2.0 dB)
+        b2_raw = dev._dev.ram_registers[0x28]
+        gain_b2 = b2_raw[6] | (b2_raw[7] << 8)
+        assert gain_b2 == 20
+
+        # Band 3 (0x2A): disabled, gain must be 0
+        b3_raw = dev._dev.ram_registers[0x2A]
+        gain_b3 = b3_raw[6] | (b3_raw[7] << 8)
+        assert gain_b3 == 0

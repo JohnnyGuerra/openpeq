@@ -112,3 +112,23 @@ def test_walkplay_real_hid_read_loop_positional_timeout():
     state = dev.read_current_peq()
     assert state["preamp"] == -2.0
     assert len(state["bands"]) == 8
+
+
+def test_walkplay_disabled_bands_muted():
+    """Verify that disabled bands (enabled: False) are encoded with 0.0 dB gain in WalkPlay apply_preset."""
+    dev = WalkPlayDSPDevice(vendor_id=0x3302, product_id=0xC20F, use_mock=True)
+    with dev:
+        preset = {
+            "name": "WalkPlay Disabled Test",
+            "preamp": 0.0,
+            "bands": [
+                {"index": 1, "type": "PK", "freq": 1000.0, "gain": 4.0, "q": 1.0, "enabled": False},
+                {"index": 2, "type": "PK", "freq": 2000.0, "gain": 3.0, "q": 1.0, "enabled": True},
+            ],
+        }
+        dev.apply_preset(preset)
+        state = dev.read_current_peq()
+        # Filter 0 was disabled: eff_gain should be 0.0
+        assert state["bands"][0]["gain"] == 0.0
+        # Filter 1 was enabled: eff_gain should be 3.0
+        assert state["bands"][1]["gain"] == 3.0

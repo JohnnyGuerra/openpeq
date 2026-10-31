@@ -154,7 +154,8 @@ export function encodeKtMicroBandPackets(bandIndex, band, compensate2X = false) 
   let freq = Number(band.freq ?? 1000.0);
   if (compensate2X) freq = freq / 2.0;
 
-  let gainScaled = Math.round(Number(band.gain ?? 0.0) * 10);
+  const effGain = band.enabled === false ? 0.0 : Number(band.gain ?? 0.0);
+  let gainScaled = Math.round(effGain * 10);
   if (gainScaled < 0) gainScaled += 0x10000;
   const gainLo = gainScaled & 0xff;
   const gainHi = (gainScaled >> 8) & 0xff;
@@ -198,7 +199,8 @@ export function encodeMoondropReport(bands, preampDb, commitFlash = false) {
   for (const b of activeBands) {
     const ftype = typeMap[String(b.type || "PK").toUpperCase()] ?? 0;
     const freq = Math.round(Number(b.freq ?? 1000.0));
-    let gain = Math.round(Number(b.gain ?? 0.0) * 10.0);
+    const effGain = b.enabled === false ? 0.0 : Number(b.gain ?? 0.0);
+    let gain = Math.round(effGain * 10.0);
     if (gain < 0) gain += 256;
     const qVal = Math.round(Number(b.q ?? 1.0) * 10.0) & 0xff;
 
@@ -284,10 +286,10 @@ export function waitForUsbReenumeration(hidApi, filters = KTMICRO_FILTERS, timeo
 // ── Two-Way WebHID Register Readback ──────────────────────────────────────────
 
 export async function sendKtMicroFilter(dev, filterVal = 1) {
-  if (dev && (dev.vendorId === 0x31B2 || dev.vendorId === 0x31b2 || dev.vendorId === 12722)) {
-    throw new Error("SAFETY BLOCK: Register 0x11 (DAC Filter) is unsupported on KT02H20 / Allegro Mini (0x31B2) and causes volume control lockout.");
+  const isFiio = Boolean(dev && (dev.vendorId === 0x2972 || dev.vendorId === 10610));
+  if (!isFiio) {
+    throw new Error("SAFETY BLOCK: Register 0x11 (DAC Filter) is strictly a FiiO JA11 (0x2972) feature and is blocked on other KTMicro hardware (0x31B2) to prevent volume control lockout.");
   }
-  if (!dev) throw new Error("No device provided.");
   const REPORT_ID = 0x4b;
   const CMD_WRITE = 0x57;
   const payload = new Uint8Array([
@@ -416,12 +418,16 @@ export async function readKtMicroPeq(dev, options = {}) {
   }
 
   // 3. DAC filter (0x11)
-  let dacFilter = 1;
-  if (!isNoPregain) {
+  let dacFilter = null;
+  const isFiio = Boolean(dev && (dev.vendorId === 0x2972 || dev.vendorId === 10610)) && !isNoPregain;
+  if (isFiio) {
     try {
       const filtResp = await readKtMicroRegister(dev, 0x11, 200);
       if (filtResp && filtResp.length > 6) dacFilter = filtResp[6];
-    } catch (_) {}
+      else dacFilter = 1;
+    } catch (_) {
+      dacFilter = 1;
+    }
   }
 
   // 4. Five bands (0x26 - 0x2F)

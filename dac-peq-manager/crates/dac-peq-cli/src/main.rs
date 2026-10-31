@@ -17,10 +17,56 @@ const KNOWN_HARDWARE: &[(u16, u16, &str)] = &[
     (0x2972, 0x0034, "FiiO KA11 (Legacy)"),
     (0x1908, 0x2070, "JCALLY JM20 / JM6 Pro"),
     (0x3302, 0x022A, "Moondrop Click"),
-    (0x3302, 0x43CC, "CrinEar Protocol Max (WalkPlay)"),
-    (0x3302, 0x4307, "Tanchjim SPACE Pro (WalkPlay)"),
-    (0x3302, 0x431D, "Tanchjim SPACE Pro Rev B (WalkPlay)"),
-    (0x31B2, 0x0112, "Moondrop FreeDSP / Mays"),
+    (0x3302, 0x43CC, "CrinEar Protocol Max (WalkPlay 10-Band)"),
+    (0x3302, 0x4307, "Tanchjim SPACE Pro (WalkPlay 10-Band)"),
+    (0x3302, 0x431D, "Tanchjim SPACE Pro Rev B (WalkPlay 10-Band)"),
+    (0x3302, 0x4362, "WalkPlay Scheme 11 (8-Band)"),
+    (0x3302, 0x4353, "WalkPlay Scheme 16 (8-Band)"),
+    (0x3302, 0xC20F, "WalkPlay Generic (8-Band)"),
+    (0x0BDA, 0x0023, "WalkPlay Realtek ALC5686 OEM (8-Band)"),
+    (0x31B2, 0x0112, "Moondrop FreeDSP / May"),
+];
+
+static EMBEDDED_PRESETS: &[(&str, &str)] = &[
+    ("bmasterx6", include_str!("../../../presets/bmasterx6.json")),
+    ("blessing3", include_str!("../../../presets/blessing3.json")),
+    ("cadenza", include_str!("../../../presets/cadenza.json")),
+    ("chu2", include_str!("../../../presets/chu2.json")),
+    ("ew300_gold", include_str!("../../../presets/ew300_gold.json")),
+    ("ew300_silver", include_str!("../../../presets/ew300_silver.json")),
+    ("flat", include_str!("../../../presets/flat.json")),
+    ("hd600", include_str!("../../../presets/hd600.json")),
+    ("hexa", include_str!("../../../presets/hexa.json")),
+    ("supermix4", include_str!("../../../presets/supermix4.json")),
+    ("test_export", include_str!("../../../presets/test_export.json")),
+    ("waner", include_str!("../../../presets/waner.json")),
+    ("zero_red", include_str!("../../../presets/zero_red.json")),
+    ("zero2", include_str!("../../../presets/zero2.json")),
+    // Slug Aliases
+    ("7hz-zero2", include_str!("../../../presets/zero2.json")),
+    ("ew300-gold", include_str!("../../../presets/ew300_gold.json")),
+    ("ew300-silver", include_str!("../../../presets/ew300_silver.json")),
+    ("kiwi-ears-cadenza", include_str!("../../../presets/cadenza.json")),
+    ("moondrop-blessing3", include_str!("../../../presets/blessing3.json")),
+    ("moondrop-chu2", include_str!("../../../presets/chu2.json")),
+    ("sennheiser-hd600", include_str!("../../../presets/hd600.json")),
+    ("simgot-supermix4", include_str!("../../../presets/supermix4.json")),
+    ("tangzu-waner", include_str!("../../../presets/waner.json")),
+    ("truthear-hexa", include_str!("../../../presets/hexa.json")),
+    ("truthear-zero-red", include_str!("../../../presets/zero_red.json")),
+    // Targets
+    ("bk_5128_df", include_str!("../../../presets/targets/bk_5128_df.json")),
+    ("targets/bk_5128_df", include_str!("../../../presets/targets/bk_5128_df.json")),
+    ("harman_in_ear_2019v2", include_str!("../../../presets/targets/harman_in_ear_2019v2.json")),
+    ("targets/harman_in_ear_2019v2", include_str!("../../../presets/targets/harman_in_ear_2019v2.json")),
+    ("ief_neutral", include_str!("../../../presets/targets/ief_neutral.json")),
+    ("targets/ief_neutral", include_str!("../../../presets/targets/ief_neutral.json")),
+    ("iso_loudness", include_str!("../../../presets/targets/iso_loudness.json")),
+    ("targets/iso_loudness", include_str!("../../../presets/targets/iso_loudness.json")),
+    ("jm_1", include_str!("../../../presets/targets/jm_1.json")),
+    ("targets/jm_1", include_str!("../../../presets/targets/jm_1.json")),
+    ("oratory_usound", include_str!("../../../presets/targets/oratory_usound.json")),
+    ("targets/oratory_usound", include_str!("../../../presets/targets/oratory_usound.json")),
 ];
 
 #[derive(Parser)]
@@ -165,6 +211,18 @@ fn resolve_preset(preset_str: &str) -> Result<PeqPreset> {
         }
     }
 
+    // Embedded fallback
+    let clean = preset_str
+        .trim_end_matches(".json")
+        .to_lowercase();
+    for (name, json_data) in EMBEDDED_PRESETS {
+        if *name == clean || *name == clean.trim_start_matches("targets/") || format!("targets/{name}") == clean {
+            let preset: PeqPreset = serde_json::from_str(json_data)
+                .with_context(|| format!("Failed to parse embedded preset '{name}'"))?;
+            return Ok(preset);
+        }
+    }
+
     anyhow::bail!("Preset '{}' not found as a file or in bundled presets directory.", preset_str);
 }
 
@@ -184,11 +242,38 @@ fn write_hid_report(dev: &hidapi::HidDevice, rpt_bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn find_ktmicro_device(
+fn write_walkplay_report(dev: &hidapi::HidDevice, pkt: &[u8]) -> Result<()> {
+    let mut buf = [0u8; 65];
+    buf[0] = 0x4B;
+    let copy_len = pkt.len().min(64);
+    buf[1..1 + copy_len].copy_from_slice(&pkt[..copy_len]);
+    dev.write(&buf)
+        .with_context(|| "Failed to write WalkPlay HID report to USB DAC")?;
+    thread::sleep(Duration::from_millis(35));
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeviceArch {
+    KtMicro { clock_divisor_2x: bool },
+    WalkPlay { max_bands: usize },
+    Moondrop,
+}
+
+#[derive(Debug, Clone)]
+struct SupportedDevice {
+    path: CString,
+    vid: u16,
+    pid: u16,
+    prod: String,
+    arch: DeviceArch,
+}
+
+fn find_supported_device(
     api: &hidapi::HidApi,
     vid_filter: Option<u16>,
     pid_filter: Option<u16>,
-) -> Result<Option<(CString, u16, u16, String, bool)>> {
+) -> Result<Option<SupportedDevice>> {
     for dev in api.device_list() {
         let vid = dev.vendor_id();
         let pid = dev.product_id();
@@ -216,11 +301,42 @@ fn find_ktmicro_device(
             continue;
         }
 
-        let is_ktmicro = vid == 0x31B2
+        // Moondrop FreeDSP / May (0x31B2:0x0112, 9-band DSP)
+        if vid == 0x31B2 && pid == 0x0112 {
+            return Ok(Some(SupportedDevice {
+                path: dev.path().to_owned(),
+                vid,
+                pid,
+                prod,
+                arch: DeviceArch::Moondrop,
+            }));
+        }
+
+        // WalkPlay devices
+        let is_walkplay = (vid == 0x3302 && pid != 0x022A && pid != 0x3365)
+            || (vid == 0x0BDA && pid == 0x0023);
+
+        if is_walkplay {
+            let max_bands = if vid == 0x3302 && (pid == 0x4307 || pid == 0x431D || pid == 0x43CC) {
+                10
+            } else {
+                8
+            };
+            return Ok(Some(SupportedDevice {
+                path: dev.path().to_owned(),
+                vid,
+                pid,
+                prod,
+                arch: DeviceArch::WalkPlay { max_bands },
+            }));
+        }
+
+        // KTMicro devices
+        let is_ktmicro = (vid == 0x31B2 && pid != 0x0112)
             || (vid == 0x2972 && (pid == 0x0102 || pid == 0x0034))
             || (vid == 0x1908 && pid == 0x2070)
             || (vid == 0x3302 && pid == 0x022A)
-            || vid_filter.is_some();
+            || (vid_filter.is_some() && !is_walkplay);
 
         if is_ktmicro {
             let rel = dev.release_number();
@@ -230,11 +346,34 @@ fn find_ktmicro_device(
             } else {
                 rel <= 0x0100
             };
-            return Ok(Some((dev.path().to_owned(), vid, pid, prod, clock_divisor_2x)));
+            return Ok(Some(SupportedDevice {
+                path: dev.path().to_owned(),
+                vid,
+                pid,
+                prod,
+                arch: DeviceArch::KtMicro { clock_divisor_2x },
+            }));
         }
     }
 
     Ok(None)
+}
+
+#[allow(dead_code)]
+fn find_ktmicro_device(
+    api: &hidapi::HidApi,
+    vid_filter: Option<u16>,
+    pid_filter: Option<u16>,
+) -> Result<Option<(CString, u16, u16, String, bool)>> {
+    match find_supported_device(api, vid_filter, pid_filter)? {
+        Some(info) => match info.arch {
+            DeviceArch::KtMicro { clock_divisor_2x } => {
+                Ok(Some((info.path, info.vid, info.pid, info.prod, clock_divisor_2x)))
+            }
+            _ => Ok(None),
+        },
+        None => Ok(None),
+    }
 }
 
 fn render_ascii_plot(p: &PeqPreset) {
@@ -332,15 +471,16 @@ fn main() -> Result<()> {
                     || vid == 0x0572
                     || (vid == 0x3302 && pid == 0x3365);
 
+                let is_moondrop_freedsp = vid == 0x31B2 && pid == 0x0112;
                 let is_known = KNOWN_HARDWARE.iter().any(|(k_vid, k_pid, _)| *k_vid == vid && *k_pid == pid);
-                let is_ktmicro = vid == 0x31B2
+                let is_ktmicro = (vid == 0x31B2 && pid != 0x0112)
                     || (vid == 0x2972 && (pid == 0x0102 || pid == 0x0034))
                     || (vid == 0x1908 && pid == 0x2070)
                     || (vid == 0x3302 && pid == 0x022A);
                 let is_walkplay = (vid == 0x3302 && pid != 0x022A && pid != 0x3365)
                     || (vid == 0x0BDA && pid == 0x0023);
 
-                if is_cx || is_known || is_ktmicro || is_walkplay {
+                if is_cx || is_known || is_ktmicro || is_walkplay || is_moondrop_freedsp {
                     found += 1;
                     let known_name = KNOWN_HARDWARE
                         .iter()
@@ -350,6 +490,8 @@ fn main() -> Result<()> {
 
                     let badge = if is_cx {
                         "[HOST-DSP ONLY - Fixed Mask ROM]".bold().yellow()
+                    } else if is_moondrop_freedsp {
+                        "[HARDWARE FLASHABLE (Moondrop 9-Band DSP)]".bold().green()
                     } else if is_ktmicro {
                         "[HARDWARE FLASHABLE (KTMicro KT02H20)]".bold().green()
                     } else if is_walkplay {
@@ -382,56 +524,184 @@ fn main() -> Result<()> {
             let target_pid = pid.as_deref().map(parse_hex_u16).transpose()?;
 
             let mut p = resolve_preset(&preset)?;
-            if p.bands.len() > 5 {
-                println!(
-                    "{} Preset has {} bands; decimating to 5 hardware bands...",
-                    "[INFO]".bold().blue(),
-                    p.bands.len()
-                );
-                p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
-            }
-
-            println!("{}", format!("[APPLY] Loading preset '{}' into live DSP RAM (Slot {})...", p.name, slot).bold().cyan());
 
             if dry_run {
                 let v = target_vid.unwrap_or(0x31B2);
                 let p_id = target_pid.unwrap_or(0x0111);
                 assert_safe_for_hardware_flash(v, p_id, None)?;
-                let reports = encode_ram_preset_payload(&p, v, p_id, slot, true)?;
-                println!("  Generated {} low-level RAM reports.", reports.len());
-                for (i, r) in reports.iter().enumerate() {
-                    let b = r.as_bytes();
-                    println!("    Report #{}: {:02X?}", i + 1, b);
+
+                let is_moondrop = v == 0x31B2 && p_id == 0x0112;
+                let is_wp = (v == 0x3302 && p_id != 0x022A && p_id != 0x3365)
+                    || (v == 0x0BDA && p_id == 0x0023);
+
+                if is_moondrop {
+                    if p.bands.len() != 9 {
+                        println!(
+                            "{} Preset has {} bands; adjusting to 9 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
+                    }
+                    println!("{}", format!("[APPLY] Loading preset '{}' into Moondrop FreeDSP live RAM...", p.name).bold().cyan());
+                    let report = encode_moondrop_report(&p.bands, p.preamp, false);
+                    println!("  Generated 64-byte Moondrop report: {:02X?}", &report[..]);
+                    println!("{} Simulated live DSP write (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
+                } else if is_wp {
+                    let max_bands = if v == 0x3302 && (p_id == 0x4307 || p_id == 0x431D || p_id == 0x43CC) {
+                        10
+                    } else {
+                        8
+                    };
+                    if p.bands.len() != max_bands {
+                        println!(
+                            "{} Preset has {} bands; adjusting to {} hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len(),
+                            max_bands
+                        );
+                        p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
+                    }
+                    println!("{}", format!("[APPLY] Loading preset '{}' into WalkPlay DSP RAM (Slot 101)...", p.name).bold().cyan());
+                    for (i, b) in p.bands.iter().enumerate() {
+                        let eff_gain = if b.enabled { b.gain } else { 0.0 };
+                        let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
+                            i as u8,
+                            b.freq,
+                            eff_gain,
+                            b.q,
+                            b.filter_type,
+                            101,
+                        );
+                        println!("    Band #{}: {:02X?}", i + 1, pkt);
+                    }
+                    let gain_pkt = encode_walkplay_global_gain(p.preamp);
+                    println!("    Global Gain: {:02X?}", gain_pkt);
+                    println!("{} Simulated live DSP write (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
+                } else {
+                    if p.bands.len() > 5 {
+                        println!(
+                            "{} Preset has {} bands; decimating to 5 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
+                    }
+                    println!("{}", format!("[APPLY] Loading preset '{}' into live DSP RAM (Slot {})...", p.name, slot).bold().cyan());
+                    let reports = encode_ram_preset_payload(&p, v, p_id, slot, true)?;
+                    println!("  Generated {} low-level RAM reports.", reports.len());
+                    for (i, r) in reports.iter().enumerate() {
+                        let b = r.as_bytes();
+                        println!("    Report #{}: {:02X?}", i + 1, b);
+                    }
+                    println!("{} Simulated live DSP write (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
                 }
-                println!("{} Simulated live DSP write (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
-                return Ok(());
             }
 
             let api = hidapi::HidApi::new().context("Failed to initialize HIDAPI")?;
-            let matched = find_ktmicro_device(&api, target_vid, target_pid)?;
-            let (dev_path, dev_vid, dev_pid, dev_prod, clock_divisor_2x) = match matched {
+            let matched = find_supported_device(&api, target_vid, target_pid)?;
+            let dev_info = match matched {
                 Some(info) => info,
                 None => {
-                    anyhow::bail!("No compatible KTMicro USB DAC found. Connect a device or use --dry-run.");
+                    anyhow::bail!("No compatible KTMicro, WalkPlay, or Moondrop USB DAC found. Connect a device or use --dry-run.");
                 }
             };
 
-            assert_safe_for_hardware_flash(dev_vid, dev_pid, Some(&dev_prod))?;
-            println!(
-                "  Connecting to [{:04X}:{:04X}] {} (2X clock compensation: {})...",
-                dev_vid, dev_pid, dev_prod.bold(), clock_divisor_2x
-            );
+            assert_safe_for_hardware_flash(dev_info.vid, dev_info.pid, Some(&dev_info.prod))?;
 
-            let device = api.open_path(&dev_path).with_context(|| {
-                format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_vid, dev_pid)
-            })?;
+            match dev_info.arch {
+                DeviceArch::Moondrop => {
+                    if p.bands.len() != 9 {
+                        println!(
+                            "{} Preset has {} bands; adjusting to 9 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
+                    }
+                    println!("{}", format!("[APPLY] Loading preset '{}' into Moondrop FreeDSP live RAM...", p.name).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (Moondrop 9-Band DSP)...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold()
+                    );
 
-            let reports = encode_ram_preset_payload(&p, dev_vid, dev_pid, slot, clock_divisor_2x)?;
-            for r in &reports {
-                write_hid_report(&device, r.as_bytes())?;
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
+
+                    let report = encode_moondrop_report(&p.bands, p.preamp, false);
+                    write_hid_report(&device, &report)?;
+
+                    println!("{} Moondrop FreeDSP PEQ active in live DSP RAM.", "[OK]".bold().green());
+                }
+                DeviceArch::WalkPlay { max_bands } => {
+                    if p.bands.len() != max_bands {
+                        println!(
+                            "{} Preset has {} bands; adjusting to {} hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len(),
+                            max_bands
+                        );
+                        p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
+                    }
+                    println!("{}", format!("[APPLY] Loading preset '{}' into WalkPlay DSP RAM (Slot 101)...", p.name).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (WalkPlay {}-Band DSP)...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold(), max_bands
+                    );
+
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
+
+                    for (i, b) in p.bands.iter().enumerate() {
+                        let eff_gain = if b.enabled { b.gain } else { 0.0 };
+                        let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
+                            i as u8,
+                            b.freq,
+                            eff_gain,
+                            b.q,
+                            b.filter_type,
+                            101,
+                        );
+                        write_walkplay_report(&device, &pkt)?;
+                    }
+                    let gain_pkt = encode_walkplay_global_gain(p.preamp);
+                    write_walkplay_report(&device, &gain_pkt)?;
+
+                    println!("{} WalkPlay PEQ active in live DSP RAM.", "[OK]".bold().green());
+                }
+                DeviceArch::KtMicro { clock_divisor_2x } => {
+                    if p.bands.len() > 5 {
+                        println!(
+                            "{} Preset has {} bands; decimating to 5 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
+                    }
+
+                    println!("{}", format!("[APPLY] Loading preset '{}' into live DSP RAM (Slot {})...", p.name, slot).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (2X clock compensation: {})...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold(), clock_divisor_2x
+                    );
+
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
+
+                    let reports = encode_ram_preset_payload(&p, dev_info.vid, dev_info.pid, slot, clock_divisor_2x)?;
+                    for r in &reports {
+                        write_hid_report(&device, r.as_bytes())?;
+                    }
+
+                    println!("{} PEQ active in live DSP RAM.", "[OK]".bold().green());
+                }
             }
-
-            println!("{} PEQ active in live DSP RAM.", "[OK]".bold().green());
         }
 
         Commands::Flash { preset, slot, yes, vid, pid, dry_run } => {
@@ -439,44 +709,100 @@ fn main() -> Result<()> {
             let target_pid = pid.as_deref().map(parse_hex_u16).transpose()?;
 
             let mut p = resolve_preset(&preset)?;
-            if p.bands.len() > 5 {
-                println!(
-                    "{} Preset has {} bands; decimating to 5 hardware bands...",
-                    "[INFO]".bold().blue(),
-                    p.bands.len()
-                );
-                p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
-            }
 
             if dry_run {
                 let v = target_vid.unwrap_or(0x31B2);
                 let p_id = target_pid.unwrap_or(0x0111);
                 assert_safe_for_hardware_flash(v, p_id, None)?;
-                println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
-                let reports = encode_preset_payload(&p, v, p_id, slot, true, true)?;
-                println!("  Generated {} low-level HID reports (including 0x53 COMMIT).", reports.len());
-                for (i, r) in reports.iter().enumerate() {
-                    let b = r.as_bytes();
-                    println!("    Report #{}: {:02X?}", i + 1, b);
+
+                let is_moondrop = v == 0x31B2 && p_id == 0x0112;
+                let is_wp = (v == 0x3302 && p_id != 0x022A && p_id != 0x3365)
+                    || (v == 0x0BDA && p_id == 0x0023);
+
+                if is_moondrop {
+                    if p.bands.len() != 9 {
+                        println!(
+                            "{} Preset has {} bands; adjusting to 9 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
+                    }
+                    println!("{}", format!("[FLASH] Burning preset '{}' to Moondrop FreeDSP NVRAM flash...", p.name).bold().cyan());
+                    let report = encode_moondrop_report(&p.bands, p.preamp, true);
+                    println!("  Generated 64-byte Moondrop flash report (0x21 COMMIT): {:02X?}", &report[..]);
+                    println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
+                } else if is_wp {
+                    let max_bands = if v == 0x3302 && (p_id == 0x4307 || p_id == 0x431D || p_id == 0x43CC) {
+                        10
+                    } else {
+                        8
+                    };
+                    if p.bands.len() != max_bands {
+                        println!(
+                            "{} Preset has {} bands; adjusting to {} hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len(),
+                            max_bands
+                        );
+                        p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
+                    }
+                    println!("{}", format!("[FLASH] Burning preset '{}' to WalkPlay NVRAM flash...", p.name).bold().cyan());
+                    for (i, b) in p.bands.iter().enumerate() {
+                        let eff_gain = if b.enabled { b.gain } else { 0.0 };
+                        let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
+                            i as u8,
+                            b.freq,
+                            eff_gain,
+                            b.q,
+                            b.filter_type,
+                            101,
+                        );
+                        println!("    Band #{}: {:02X?}", i + 1, pkt);
+                    }
+                    let gain_pkt = encode_walkplay_global_gain(p.preamp);
+                    println!("    Global Gain: {:02X?}", gain_pkt);
+                    for (i, c) in get_walkplay_commit_sequence().iter().enumerate() {
+                        println!("    Commit step #{}: {:02X?}", i + 1, c);
+                    }
+                    println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
+                } else {
+                    if p.bands.len() > 5 {
+                        println!(
+                            "{} Preset has {} bands; decimating to 5 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
+                    }
+                    println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
+                    let reports = encode_preset_payload(&p, v, p_id, slot, true, true)?;
+                    println!("  Generated {} low-level HID reports (including 0x53 COMMIT).", reports.len());
+                    for (i, r) in reports.iter().enumerate() {
+                        let b = r.as_bytes();
+                        println!("    Report #{}: {:02X?}", i + 1, b);
+                    }
+                    println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
+                    return Ok(());
                 }
-                println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
-                return Ok(());
             }
 
             let api = hidapi::HidApi::new().context("Failed to initialize HIDAPI")?;
-            let matched = find_ktmicro_device(&api, target_vid, target_pid)?;
-            let (dev_path, dev_vid, dev_pid, dev_prod, clock_divisor_2x) = match matched {
+            let matched = find_supported_device(&api, target_vid, target_pid)?;
+            let dev_info = match matched {
                 Some(info) => info,
                 None => {
-                    anyhow::bail!("No compatible KTMicro USB DAC found. Connect a device or use --dry-run.");
+                    anyhow::bail!("No compatible KTMicro, WalkPlay, or Moondrop USB DAC found. Connect a device or use --dry-run.");
                 }
             };
 
-            assert_safe_for_hardware_flash(dev_vid, dev_pid, Some(&dev_prod))?;
+            assert_safe_for_hardware_flash(dev_info.vid, dev_info.pid, Some(&dev_info.prod))?;
 
             if !yes {
                 eprintln!("{}", "⚠️  NVRAM Flash commits permanently to hardware flash memory (~10k-100k cycles).".yellow());
-                eprint!("Commit preset '{}' to hardware flash on [{:04X}:{:04X}] {}? [y/N]: ", p.name, dev_vid, dev_pid, dev_prod);
+                eprint!("Commit preset '{}' to hardware flash on [{:04X}:{:04X}] {}? [y/N]: ", p.name, dev_info.vid, dev_info.pid, dev_info.prod);
                 std::io::stderr().flush()?;
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input)?;
@@ -486,26 +812,105 @@ fn main() -> Result<()> {
                 }
             }
 
-            println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
-            println!(
-                "  Connecting to [{:04X}:{:04X}] {} (2X clock compensation: {})...",
-                dev_vid, dev_pid, dev_prod.bold(), clock_divisor_2x
-            );
+            match dev_info.arch {
+                DeviceArch::Moondrop => {
+                    if p.bands.len() != 9 {
+                        println!(
+                            "{} Preset has {} bands; adjusting to 9 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
+                    }
+                    println!("{}", format!("[FLASH] Burning preset '{}' to Moondrop FreeDSP NVRAM flash...", p.name).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (Moondrop 9-Band DSP)...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold()
+                    );
 
-            let device = api.open_path(&dev_path).with_context(|| {
-                format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_vid, dev_pid)
-            })?;
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
 
-            let reports = encode_preset_payload(&p, dev_vid, dev_pid, slot, clock_divisor_2x, true)?;
-            for r in &reports {
-                write_hid_report(&device, r.as_bytes())?;
+                    let report = encode_moondrop_report(&p.bands, p.preamp, true);
+                    write_hid_report(&device, &report)?;
+
+                    thread::sleep(Duration::from_millis(500));
+
+                    println!("{} PEQ curve successfully burned to Moondrop FreeDSP flash!", "[OK]".bold().green());
+                }
+                DeviceArch::WalkPlay { max_bands } => {
+                    if p.bands.len() != max_bands {
+                        println!(
+                            "{} Preset has {} bands; adjusting to {} hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len(),
+                            max_bands
+                        );
+                        p.bands = decimate_bands(&p.bands, max_bands, true, 48000.0);
+                    }
+                    println!("{}", format!("[FLASH] Burning preset '{}' to WalkPlay NVRAM flash...", p.name).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (WalkPlay {}-Band DSP)...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold(), max_bands
+                    );
+
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
+
+                    for (i, b) in p.bands.iter().enumerate() {
+                        let eff_gain = if b.enabled { b.gain } else { 0.0 };
+                        let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
+                            i as u8,
+                            b.freq,
+                            eff_gain,
+                            b.q,
+                            b.filter_type,
+                            101,
+                        );
+                        write_walkplay_report(&device, &pkt)?;
+                    }
+                    let gain_pkt = encode_walkplay_global_gain(p.preamp);
+                    write_walkplay_report(&device, &gain_pkt)?;
+                    for c in get_walkplay_commit_sequence() {
+                        write_walkplay_report(&device, &c)?;
+                    }
+
+                    println!("{} PEQ curve successfully burned to WalkPlay NVRAM flash!", "[OK]".bold().green());
+                }
+                DeviceArch::KtMicro { clock_divisor_2x } => {
+                    if p.bands.len() > 5 {
+                        println!(
+                            "{} Preset has {} bands; decimating to 5 hardware bands...",
+                            "[INFO]".bold().blue(),
+                            p.bands.len()
+                        );
+                        p.bands = decimate_bands(&p.bands, 5, true, 48000.0);
+                    }
+
+                    println!("{}", format!("[FLASH] Burning preset '{}' to NVRAM flash (Slot {})...", p.name, slot).bold().cyan());
+                    println!(
+                        "  Connecting to [{:04X}:{:04X}] {} (2X clock compensation: {})...",
+                        dev_info.vid, dev_info.pid, dev_info.prod.bold(), clock_divisor_2x
+                    );
+
+                    let device = api.open_path(&dev_info.path).with_context(|| {
+                        format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
+                    })?;
+
+                    let reports = encode_preset_payload(&p, dev_info.vid, dev_info.pid, slot, clock_divisor_2x, true)?;
+                    for r in &reports {
+                        write_hid_report(&device, r.as_bytes())?;
+                    }
+
+                    // Consume commit response if returned by MCU before soft reboot
+                    let mut ack = [0u8; 64];
+                    let _ = device.read_timeout(&mut ack, 300);
+
+                    println!("{} PEQ curve successfully burned to hardware NVRAM flash! MCU soft-rebooting...", "[OK]".bold().green());
+                }
             }
-
-            // Consume commit response if returned by MCU before soft reboot
-            let mut ack = [0u8; 64];
-            let _ = device.read_timeout(&mut ack, 300);
-
-            println!("{} PEQ curve successfully burned to hardware NVRAM flash! MCU soft-rebooting...", "[OK]".bold().green());
         }
 
         Commands::Reset { yes, vid, pid, dry_run } => {
@@ -521,18 +926,32 @@ fn main() -> Result<()> {
             }
 
             let api = hidapi::HidApi::new().context("Failed to initialize HIDAPI")?;
-            let matched = find_ktmicro_device(&api, target_vid, target_pid)?;
-            let (dev_path, dev_vid, dev_pid, dev_prod, _) = match matched {
-                Some(info) => info,
+            let matched = find_supported_device(&api, target_vid, target_pid)?;
+            let dev_info = match matched {
+                Some(info) => {
+                    if matches!(info.arch, DeviceArch::WalkPlay { .. }) {
+                        anyhow::bail!(
+                            "Factory reset (0x43 CLEAR) is specific to KTMicro KT02H20 hardware. WalkPlay devices [{:04X}:{:04X}] {} do not support 0x43 CLEAR (apply a flat preset instead).",
+                            info.vid, info.pid, info.prod
+                        );
+                    }
+                    if matches!(info.arch, DeviceArch::Moondrop) {
+                        anyhow::bail!(
+                            "Factory reset (0x43 CLEAR) is specific to KTMicro KT02H20 hardware. Moondrop FreeDSP [{:04X}:{:04X}] {} does not support 0x43 CLEAR (apply a flat preset instead).",
+                            info.vid, info.pid, info.prod
+                        );
+                    }
+                    info
+                }
                 None => {
                     anyhow::bail!("No compatible KTMicro USB DAC found. Connect a device or use --dry-run.");
                 }
             };
 
-            assert_safe_for_hardware_flash(dev_vid, dev_pid, Some(&dev_prod))?;
+            assert_safe_for_hardware_flash(dev_info.vid, dev_info.pid, Some(&dev_info.prod))?;
 
             if !yes {
-                eprint!("Send 0x43 CLEAR to restore stock factory defaults on [{:04X}:{:04X}] {}? [y/N]: ", dev_vid, dev_pid, dev_prod);
+                eprint!("Send 0x43 CLEAR to restore stock factory defaults on [{:04X}:{:04X}] {}? [y/N]: ", dev_info.vid, dev_info.pid, dev_info.prod);
                 std::io::stderr().flush()?;
                 let mut input = String::new();
                 std::io::stdin().read_line(&mut input)?;
@@ -544,11 +963,11 @@ fn main() -> Result<()> {
 
             println!(
                 "  Connecting to [{:04X}:{:04X}] {}...",
-                dev_vid, dev_pid, dev_prod.bold()
+                dev_info.vid, dev_info.pid, dev_info.prod.bold()
             );
 
-            let device = api.open_path(&dev_path).with_context(|| {
-                format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_vid, dev_pid)
+            let device = api.open_path(&dev_info.path).with_context(|| {
+                format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
             })?;
 
             let rpt = encode_factory_reset();

@@ -114,6 +114,27 @@ export function compute_composite_curve(bands_json, preamp_db, points, fs) {
 
 /**
  * @param {string} bands_json
+ * @param {number} preamp_db
+ * @param {Float64Array} freqs
+ * @param {number} fs
+ * @returns {Float64Array}
+ */
+export function compute_composite_curve_at_freqs(bands_json, preamp_db, freqs, fs) {
+    const ptr0 = passStringToWasm0(bands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF64ToWasm0(freqs, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.compute_composite_curve_at_freqs(ptr0, len0, preamp_db, ptr1, len1, fs);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+    return v3;
+}
+
+/**
+ * @param {string} bands_json
  * @param {number} target_count
  * @param {boolean | null} [refit_gains]
  * @param {number | null} [fs]
@@ -189,6 +210,21 @@ export function encode_ktmicro_payload(preset_json, vid, pid, slot_id, compensat
     const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.encode_ktmicro_payload(ptr0, len0, vid, pid, slot_id, compensate_2x, commit_nvram);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {string} preset_json
+ * @param {boolean} commit_flash
+ * @returns {Uint8Array}
+ */
+export function encode_moondrop_payload(preset_json, commit_flash) {
+    const ptr0 = passStringToWasm0(preset_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.encode_moondrop_payload(ptr0, len0, commit_flash);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -436,6 +472,13 @@ function getUint8ArrayMemory0() {
 
 function isLikeNone(x) {
     return x === undefined || x === null;
+}
+
+function passArrayF64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8, 8) >>> 0;
+    getFloat64ArrayMemory0().set(arg, ptr / 8);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {

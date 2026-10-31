@@ -304,5 +304,66 @@ def test_url_params_encode_decode_roundtrip():
         decode_preset_from_url_params("https://example.com/?foo=bar")
 
 
+def test_parse_parametric_eq_lsc_hsc():
+    """Verify that EqualizerAPO LSC and HSC filter types parse as LSQ and HSQ."""
+    apo_text = """Preamp: -3.0 dB
+Filter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.71
+Filter 2: ON HSC Fc 10000 Hz Gain -3.0 dB Q 0.71
+Filter 3: ON PK Fc 2500 Hz Gain 2.0 dB Q 1.50
+Filter 4: OFF PK Fc 4000 Hz Gain -1.5 dB Q 2.00
+"""
+    preset = parse_parametric_eq(apo_text)
+    assert preset["preamp"] == -3.0
+    assert len(preset["bands"]) == 4
+    assert preset["bands"][0]["type"] == "LSQ"
+    assert preset["bands"][0]["freq"] == 105.0
+    assert preset["bands"][0]["gain"] == 5.5
+    assert preset["bands"][0]["enabled"] is True
+
+    assert preset["bands"][1]["type"] == "HSQ"
+    assert preset["bands"][1]["freq"] == 10000.0
+    assert preset["bands"][1]["gain"] == -3.0
+    assert preset["bands"][1]["enabled"] is True
+
+    assert preset["bands"][2]["type"] == "PK"
+    assert preset["bands"][2]["enabled"] is True
+
+    assert preset["bands"][3]["type"] == "PK"
+    assert preset["bands"][3]["enabled"] is False
+
+
+def test_exporters_disabled_bands():
+    """Verify disabled bands handling across EqualizerAPO, PipeWire, and URL encoding/decoding."""
+    preset = {
+        "name": "disabled_demo",
+        "preamp": -1.5,
+        "bands": [
+            {"index": 1, "type": "LSQ", "freq": 100.0, "gain": 4.0, "q": 0.71, "enabled": True},
+            {"index": 2, "type": "PK", "freq": 1000.0, "gain": 2.5, "q": 1.41, "enabled": False},
+        ],
+    }
+
+    # 1. EqualizerAPO format
+    apo = format_equalizer_apo(preset)
+    assert "Filter 1: ON LSQ Fc 100.0 Hz Gain +4.0 dB Q 0.71" in apo
+    assert "Filter 2: OFF PK Fc 1000.0 Hz Gain +2.5 dB Q 1.41" in apo
+
+    # 2. PipeWire format: disabled band has Gain = 0.00
+    pw = format_pipewire_filter_chain(preset)
+    assert '"Gain" = 4.00' in pw
+    assert '"Gain" = 0.00' in pw
+
+    # 3. URL encoding / decoding
+    encoded = encode_preset_to_url_params(preset)
+    assert "b1=LSQ%2C100%2C4.0%2C0.71" in encoded
+    assert "b2=PK%2C1000%2C2.5%2C1.41%2C0" in encoded
+
+    decoded = decode_preset_from_url_params(f"https://example.com/?{encoded}")
+    assert len(decoded["bands"]) == 2
+    assert decoded["bands"][0]["enabled"] is True
+    assert decoded["bands"][1]["enabled"] is False
+    assert decoded["bands"][1]["gain"] == 2.5
+
+
 
 

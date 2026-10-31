@@ -181,3 +181,41 @@ def test_offline_fallback_snapshot_when_network_unreachable(tmp_path: Path):
         assert len(preset["bands"]) == 5
         assert len(preset["full_bands"]) == 10
 
+
+def test_parse_readme_peq_fallback_preamp():
+    """Verify fallback regex matching 'with -X.X dB preamp' in README.md."""
+    md = """# Sample IEM
+Calculated with -4.8 dB preamp according to Harman target.
+
+### Parametric EQs
+| # | Type | Fc (Hz) | Q | Gain (dB) |
+|---|------|---------|---|-----------|
+| 1 | Peaking | 1000 | 1.0 | 2.5 |
+"""
+    preamp, bands = parse_readme_peq(md)
+    assert preamp == -4.8
+    assert len(bands) == 1
+
+
+def test_pull_preset_gain_precision_01db(tmp_path: Path):
+    """Verify pull_preset preserves .01 dB gain precision."""
+    db = AutoEqDatabase(cache_dir=tmp_path)
+    entry = DatabaseEntry(
+        name="Precision IEM",
+        source="crinacle",
+        path="./Precision%20IEM",
+        fallback_preamp=-3.2,
+        fallback_bands=[
+            {"type": "PK", "freq": 100.0, "gain": 2.37, "q": 1.0},
+            {"type": "PK", "freq": 1000.0, "gain": -1.85, "q": 1.41},
+            {"type": "PK", "freq": 2500.0, "gain": 1.42, "q": 2.0},
+            {"type": "PK", "freq": 5000.0, "gain": -2.18, "q": 1.8},
+            {"type": "HSQ", "freq": 10000.0, "gain": 1.25, "q": 0.71},
+        ],
+    )
+
+    preset = db.pull_preset(entry, target_bands=None)
+    assert preset["bands"][0]["gain"] == 2.37
+    assert preset["bands"][1]["gain"] == -1.85
+    assert preset["full_bands"][0]["gain"] == 2.37
+

@@ -107,6 +107,7 @@ pub fn decode_walkplay_filter_packet(packet: &[u8]) -> Option<BiquadBand> {
     if freq_raw == 0xFFFF && q_raw == 0xFFFF && gain_raw == -1 {
         return Some(BiquadBand {
             index: Some(filter_idx),
+            enabled: true,
             filter_type: FilterType::Peaking,
             freq: 0.0,
             gain: 0.0,
@@ -121,6 +122,7 @@ pub fn decode_walkplay_filter_packet(packet: &[u8]) -> Option<BiquadBand> {
 
     Some(BiquadBand {
         index: Some(filter_idx),
+        enabled: true,
         filter_type,
         freq,
         gain,

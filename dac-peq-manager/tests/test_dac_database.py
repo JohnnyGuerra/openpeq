@@ -40,9 +40,23 @@ def test_dac_database_lookup():
     assert db.lookup(None, None) is None
     assert db.lookup(0xFFFF, 0xFFFF) is None
 
+    # Shared 0x31B2:0x0111 disambiguation via product_name
+    allegro_named = db.lookup(0x31B2, 0x0111, product_name="Kiwi Ears Allegro Mini")
+    assert allegro_named is not None
+    assert allegro_named.id == "allegro_mini"
+
+    jm12_named = db.lookup(0x31B2, 0x0111, product_name="JCALLY JM12")
+    assert jm12_named is not None
+    assert jm12_named.id == "jcally_jm12"
+    assert jm12_named.name == "JCALLY JM12"
+
 
 def test_dac_database_lookup_by_string():
     db = DACDatabase()
+    assert db.lookup_by_string("") is None
+    assert db.lookup_by_string("   ") is None
+    assert db.lookup_by_string(None) is None
+
     match = db.lookup_by_string("CableCreation")
     assert match is not None
     assert match.id == "cablecreation_2in1"

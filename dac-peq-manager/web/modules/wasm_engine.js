@@ -70,26 +70,33 @@ export function generateApoConfig(preset, freqs = LOG_FREQS) {
 // WASM-accelerated helper functions with graceful fallbacks
 export function computeCompositeResponseWasm(bands, freqs, fs = 48000) {
   const mod = getWasmEngine();
-  if (mod && typeof mod.compute_composite_curve === "function") {
+  if (mod) {
     try {
-      const rustBands = (bands || []).map((b) => ({
+      const activeBands = (bands || []).filter((b) => b.enabled !== false);
+      const rustBands = activeBands.map((b) => ({
         freq: Number(b.freq ?? b.f ?? 1000),
         gain: Number(b.gain ?? b.g ?? 0),
         q: Number(b.q ?? 1.0),
         type: String(b.type || "PK").toUpperCase(),
-        enabled: b.enabled !== false,
+        enabled: true,
       }));
       const json = JSON.stringify(rustBands);
       let result;
-      // Handle both (bands_json, freqsArray, fs) and (bands_json, preamp, points, fs)
-      if (mod.compute_composite_curve.length === 3) {
-        result = mod.compute_composite_curve(json, new Float64Array(freqs), fs);
-      } else {
-        result = mod.compute_composite_curve(json, 0.0, Array.isArray(freqs) ? freqs.length : 127, fs);
+      if (typeof mod.compute_composite_curve_at_freqs === "function") {
+        result = mod.compute_composite_curve_at_freqs(json, 0.0, new Float64Array(freqs), fs);
+      } else if (typeof mod.compute_composite_curve === "function") {
+        // Handle both (bands_json, freqsArray, fs) and (bands_json, preamp, points, fs)
+        if (mod.compute_composite_curve.length === 3) {
+          result = mod.compute_composite_curve(json, new Float64Array(freqs), fs);
+        } else {
+          result = mod.compute_composite_curve(json, 0.0, Array.isArray(freqs) ? freqs.length : 127, fs);
+        }
       }
-      const arr = Array.from(result);
-      if (arr.length > 0 && !Number.isNaN(arr[0])) {
-        return arr;
+      if (result) {
+        const arr = Array.from(result);
+        if (arr.length > 0 && !Number.isNaN(arr[0])) {
+          return arr;
+        }
       }
     } catch (err) {
       console.warn("[WASM Engine] compute_composite_curve error, falling back:", err);

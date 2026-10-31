@@ -9,7 +9,7 @@ pub fn format_wavelet_graphiceq(preset: &PeqPreset) -> String {
     let pairs: Vec<String> = freqs
         .iter()
         .zip(curve.iter())
-        .map(|(&f, &db)| format!("{:.1} {:.1}", f, db))
+        .map(|(&f, &db)| format!("{:.0} {:.1}", f.round(), db))
         .collect();
 
     format!("GraphicEQ: {}\n", pairs.join("; "))

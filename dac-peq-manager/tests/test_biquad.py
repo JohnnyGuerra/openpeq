@@ -355,6 +355,53 @@ def test_apply_macro_adjustments_and_smooth_coupler():
     assert len(lint_acoustic_bands(smoothed)) == 0
 
 
+def test_lint_acoustic_bands_ignores_disabled():
+    """Verify lint_acoustic_bands ignores acoustic warnings on disabled bands."""
+    bands = [
+        # Coupler spike artifact, but disabled
+        {"type": "PK", "freq": 8000.0, "gain": -4.5, "q": 3.0, "enabled": False},
+        # Extreme boost, but disabled
+        {"type": "PK", "freq": 2500.0, "gain": 8.0, "q": 1.0, "enabled": False},
+        # High Q ringing, but disabled
+        {"type": "PK", "freq": 1000.0, "gain": 2.0, "q": 7.0, "enabled": False},
+        # Clean active band
+        {"type": "LSQ", "freq": 100.0, "gain": 3.0, "q": 0.71, "enabled": True},
+    ]
+    warnings = lint_acoustic_bands(bands)
+    assert len(warnings) == 0
+
+
+def test_decimate_bands_disabled_handling():
+    """Verify decimate_bands ignores disabled bands and prioritizes active ones."""
+    from dac_peq.biquad import decimate_bands
+
+    # 7 bands total, 5 active, 2 disabled with huge gains that would otherwise score highest
+    bands = [
+        {"type": "LSQ", "freq": 50.0, "gain": 3.0, "q": 0.71, "enabled": True},
+        {"type": "PK", "freq": 200.0, "gain": -2.0, "q": 1.2, "enabled": True},
+        {"type": "PK", "freq": 1000.0, "gain": 12.0, "q": 1.0, "enabled": False},  # huge gain disabled
+        {"type": "PK", "freq": 2500.0, "gain": 2.5, "q": 1.5, "enabled": True},
+        {"type": "PK", "freq": 5000.0, "gain": -12.0, "q": 1.0, "enabled": False}, # huge cut disabled
+        {"type": "PK", "freq": 6000.0, "gain": -1.5, "q": 2.0, "enabled": True},
+        {"type": "HSQ", "freq": 10000.0, "gain": 2.0, "q": 0.71, "enabled": True},
+    ]
+
+    decimated = decimate_bands(bands, target_bands=5)
+    assert len(decimated) == 5
+    decimated_freqs = [b["freq"] for b in decimated]
+
+    # Neither of the disabled bands at 1000 Hz or 5000 Hz should be in the output
+    assert 1000.0 not in decimated_freqs
+    assert 5000.0 not in decimated_freqs
+
+    # The 5 active bands should be preserved
+    assert 50.0 in decimated_freqs
+    assert 200.0 in decimated_freqs
+    assert 2500.0 in decimated_freqs
+    assert 6000.0 in decimated_freqs
+    assert 10000.0 in decimated_freqs
+
+
 
 
 

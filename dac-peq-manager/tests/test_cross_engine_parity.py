@@ -347,21 +347,33 @@ def test_rust_wasm_three_way_parity():
     py_freqs = generate_log_frequencies(20.0, 20000.0, 64)
     py_curve = compute_composite_response(bands_10, 0.0, py_freqs)
     py_dec5 = decimate_bands(bands_10, target_bands=5)
+    py_exp10 = decimate_bands(py_dec5, target_bands=10)
+
+    # Also test muting band 0 (enabled: False)
+    bands_muted = [dict(b) for b in py_dec5]
+    bands_muted[0]["enabled"] = False
+    py_muted_curve = compute_composite_response([b for b in bands_muted if b.get("enabled", True)], 0.0, [50.0, 250.0, 1000.0, 4000.0, 12000.0])
 
     js_script = f"""
     import fs from 'node:fs';
-    import initWasm, {{ compute_composite_curve, decimate_bands_json }} from './wasm/dac_peq_wasm.js';
+    import initWasm, {{ compute_composite_curve, compute_composite_curve_at_freqs, decimate_bands_json }} from './wasm/dac_peq_wasm.js';
+    import {{ decimateBands }} from './modules/biquad_math.js';
 
     const wasmBytes = fs.readFileSync('./wasm/dac_peq_wasm_bg.wasm');
     await initWasm(wasmBytes);
 
     const bands10 = {json.dumps(bands_10)};
     const freqs = {json.dumps(py_freqs)};
+    const bandsMuted = {json.dumps(bands_muted)};
+    const customFreqs = [50.0, 250.0, 1000.0, 4000.0, 12000.0];
 
     const wasmCurve = Array.from(compute_composite_curve(JSON.stringify(bands10), 0.0, freqs.length, 48000.0));
     const wasmDec5 = JSON.parse(decimate_bands_json(JSON.stringify(bands10), 5));
+    const wasmExp10 = JSON.parse(decimate_bands_json(JSON.stringify(wasmDec5), 10));
+    const jsExp10 = decimateBands(wasmDec5, 10);
+    const wasmMutedCurve = Array.from(compute_composite_curve_at_freqs(JSON.stringify(bandsMuted), 0.0, new Float64Array(customFreqs), 48000.0));
 
-    console.log(JSON.stringify({{ wasmCurve, wasmDec5 }}));
+    console.log(JSON.stringify({{ wasmCurve, wasmDec5, wasmExp10, jsExp10, wasmMutedCurve }}));
     """
     wasm_out = run_node_eval(js_script)
 
@@ -373,6 +385,19 @@ def test_rust_wasm_three_way_parity():
         assert abs(pb["freq"] - wb["freq"]) < 1e-6
         assert abs(pb["gain"] - wb["gain"]) < 1e-6
         assert abs(pb["q"] - wb["q"]) < 1e-6
+
+    # 3-way 5 -> 10 expansion parity (Python == JS == Rust WASM)
+    assert len(py_exp10) == len(wasm_out["jsExp10"]) == len(wasm_out["wasmExp10"]) == 10
+    for pb, jb, wb in zip(py_exp10, wasm_out["jsExp10"], wasm_out["wasmExp10"]):
+        assert pb["type"] == jb["type"] == wb["type"]
+        assert abs(pb["freq"] - jb["freq"]) < 1e-6
+        assert abs(pb["freq"] - wb["freq"]) < 1e-6
+        assert abs(pb["gain"] - wb["gain"]) < 1e-6
+        assert abs(pb["q"] - wb["q"]) < 1e-6
+
+    # Custom frequencies & enabled=false parity
+    for pm, wm in zip(py_muted_curve, wasm_out["wasmMutedCurve"]):
+        assert abs(pm - wm) < 1e-6
 
 
 

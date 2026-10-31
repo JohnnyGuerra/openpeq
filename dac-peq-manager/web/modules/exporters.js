@@ -30,11 +30,11 @@ export function formatPipeWireConf(preset, bands, isFull = false, sinkTarget = "
     const idx = i + 1;
     const label = typeMap[String(b.type || "PK").toUpperCase()] || "bq_peaking";
     const freq = Number(b.freq ?? 1000.0);
-    const gain = Number(b.gain ?? 0.0);
+    const effGain = b.enabled === false ? 0.0 : Number(b.gain ?? 0.0);
     const q = Number(b.q ?? 1.0);
-    nodes += `                    # Band ${idx}: ${b.type} ${freq}Hz ${gain}dB Q=${q}
-                    { type = builtin, name = "eq_band${idx}_fl", label = ${label}, control = { "Freq" = ${freq.toFixed(1)}, "Gain" = ${gain.toFixed(2)}, "Q" = ${q.toFixed(2)} } }
-                    { type = builtin, name = "eq_band${idx}_fr", label = ${label}, control = { "Freq" = ${freq.toFixed(1)}, "Gain" = ${gain.toFixed(2)}, "Q" = ${q.toFixed(2)} } }\n`;
+    nodes += `                    # Band ${idx}: ${b.type} ${freq}Hz ${effGain}dB Q=${q}
+                    { type = builtin, name = "eq_band${idx}_fl", label = ${label}, control = { "Freq" = ${freq.toFixed(1)}, "Gain" = ${effGain.toFixed(2)}, "Q" = ${q.toFixed(2)} } }
+                    { type = builtin, name = "eq_band${idx}_fr", label = ${label}, control = { "Freq" = ${freq.toFixed(1)}, "Gain" = ${effGain.toFixed(2)}, "Q" = ${q.toFixed(2)} } }\n`;
   });
 
   let links = `                    { output = "preamp_fl:Out", input = "eq_band1_fl:In" }
@@ -87,7 +87,9 @@ export function formatEqualizerApo(preset, bands, isFull = false) {
     const freq = Number(b.freq ?? 1000.0);
     const gain = Number(b.gain ?? 0.0);
     const q = Number(b.q ?? 1.0);
-    txt += `Filter ${i + 1}: ON ${b.type} Fc ${freq.toFixed(1)} Hz Gain ${gain >= 0 ? "+" : ""}${gain.toFixed(1)} dB Q ${q.toFixed(2)}\n`;
+    const state = b.enabled === false ? "OFF" : "ON";
+    const gStr = `${gain >= 0 ? "+" : ""}${gain.toFixed(1)}`;
+    txt += `Filter ${i + 1}: ${state} ${b.type} Fc ${freq.toFixed(1)} Hz Gain ${gStr} dB Q ${q.toFixed(2)}\n`;
   });
   return txt;
 }
@@ -223,9 +225,9 @@ export function parseParametricEq(rawText, defaultName = "imported_peq") {
   }
 
   const typeMap = {
-    PK: "PK", PEAK: "PK", PEAKING: "PK",
-    LS: "LSQ", LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ",
-    HS: "HSQ", HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ",
+    PK: "PK", PEQ: "PK", PEAK: "PK", PEAKING: "PK",
+    LS: "LSQ", LSQ: "LSQ", LSH: "LSQ", LSC: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ",
+    HS: "HSQ", HSQ: "HSQ", HSH: "HSQ", HSC: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ",
   };
 
   const lines = text.split(/\r?\n/);
@@ -379,7 +381,8 @@ export function encodePresetToUrlParams(preset, bands = null, hwBands = 5) {
     const gain = Math.round(Math.max(-18.0, Math.min(18.0, Number(b.gain ?? 0.0))) * 100) / 100;
     const q = Math.round(Math.max(0.1, Math.min(10.0, Number(b.q ?? 1.0))) * 100) / 100;
     const freqStr = Number.isInteger(freq) ? String(Math.trunc(freq)) : freq.toFixed(1);
-    searchParams.append(`b${i + 1}`, `${ftype},${freqStr},${gain.toFixed(1)},${q.toFixed(2)}`);
+    const enabledSuffix = b.enabled === false ? ",0" : "";
+    searchParams.append(`b${i + 1}`, `${ftype},${freqStr},${gain.toFixed(1)},${q.toFixed(2)}${enabledSuffix}`);
   });
 
   return searchParams.toString();
@@ -429,9 +432,9 @@ export function decodePresetFromUrlParams(queryOrUrl, defaultName = "Shared PEQ 
   }
 
   const typeMap = {
-    PK: "PK", PEAK: "PK", PEAKING: "PK",
-    LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ", LS: "LSQ", LSC: "LSQ",
-    HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ", HS: "HSQ", HSC: "HSQ",
+    PK: "PK", PEQ: "PK", PEAK: "PK", PEAKING: "PK",
+    LSQ: "LSQ", LOW_SHELF: "LSQ", LOWSHELF: "LSQ", LS: "LSQ", LSC: "LSQ", LSH: "LSQ",
+    HSQ: "HSQ", HIGH_SHELF: "HSQ", HIGHSHELF: "HSQ", HS: "HSQ", HSC: "HSQ", HSH: "HSQ",
   };
 
   const bands = [];
@@ -439,18 +442,30 @@ export function decodePresetFromUrlParams(queryOrUrl, defaultName = "Shared PEQ 
   function parseBandTokenString(tokenStr) {
     const tokens = tokenStr.split(",").map((t) => t.trim()).filter(Boolean);
     if (tokens.length < 3) return null;
-    let ftype = "PK", freq = NaN, gain = NaN, q = 1.0;
+    let ftype = "PK", freq = NaN, gain = NaN, q = 1.0, enabled = true;
     const firstUpper = tokens[0].toUpperCase();
     if (typeMap[firstUpper]) {
       ftype = typeMap[firstUpper];
       freq = parseFloat(tokens[1]);
       gain = parseFloat(tokens[2]);
       q = tokens.length >= 4 ? parseFloat(tokens[3]) : 1.0;
+      if (tokens.length >= 5) {
+        const enToken = tokens[4].trim().toLowerCase();
+        if (["0", "false", "off"].includes(enToken)) {
+          enabled = false;
+        }
+      }
     } else {
       freq = parseFloat(tokens[0]);
       gain = parseFloat(tokens[1]);
       q = parseFloat(tokens[2]);
       ftype = tokens.length >= 4 ? (typeMap[tokens[3].toUpperCase()] || "PK") : "PK";
+      if (tokens.length >= 5) {
+        const enToken = tokens[4].trim().toLowerCase();
+        if (["0", "false", "off"].includes(enToken)) {
+          enabled = false;
+        }
+      }
     }
     if (isNaN(freq) || isNaN(gain) || isNaN(q)) return null;
     return {
@@ -459,7 +474,7 @@ export function decodePresetFromUrlParams(queryOrUrl, defaultName = "Shared PEQ 
       freq: Math.round(Math.max(20.0, Math.min(20000.0, freq)) * 10) / 10,
       gain: Math.round(Math.max(-18.0, Math.min(18.0, gain)) * 100) / 100,
       q: Math.round(Math.max(0.1, Math.min(10.0, q)) * 100) / 100,
-      enabled: true,
+      enabled,
     };
   }
 
@@ -492,5 +507,15 @@ export function decodePresetFromUrlParams(queryOrUrl, defaultName = "Shared PEQ 
     hw_bands: hwBands,
     bands,
   };
+}
+
+export function generatePipewireConfig(preset, bands = null) {
+  const bList = bands || (Array.isArray(preset) ? preset : (preset?.bands || []));
+  return formatPipeWireConf(preset || {}, bList);
+}
+
+export function generateApoConfig(preset, bands = null) {
+  const bList = bands || (Array.isArray(preset) ? preset : (preset?.bands || []));
+  return formatEqualizerApo(preset || {}, bList);
 }
 

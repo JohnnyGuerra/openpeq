@@ -128,6 +128,7 @@ pub fn compute_composite_response(
 ) -> Vec<f64> {
     let filters: Vec<BiquadCoeffs> = bands
         .iter()
+        .filter(|b| b.enabled)
         .map(|b| calculate_rbj_biquad(b.filter_type, b.freq, b.gain, b.q, fs))
         .collect();
 
@@ -181,6 +182,9 @@ pub fn lint_acoustic_bands(bands: &[BiquadBand]) -> Vec<String> {
     let mut warnings = Vec::new();
 
     for (i, b) in bands.iter().enumerate() {
+        if !b.enabled {
+            continue;
+        }
         let idx = i + 1;
         // 1. 711 coupler resonance spike check
         if (7400.0..=9600.0).contains(&b.freq) && b.q > 2.0 && b.gain <= -3.0 {

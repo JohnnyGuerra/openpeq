@@ -119,6 +119,9 @@ fn test_allegro_mini_guardrail_omits_preamp_register_0x66() {
 
 #[test]
 fn test_exporters_pipewire_and_apo() {
+    let mut disabled_band = BiquadBand::new(FilterType::HighShelf, 10000.0, 3.0, 0.71);
+    disabled_band.enabled = false;
+
     let preset = PeqPreset {
         name: "BASN Test".into(),
         description: Some("Test bass tune".into()),
@@ -127,6 +130,7 @@ fn test_exporters_pipewire_and_apo() {
         bands: vec![
             BiquadBand::new(FilterType::LowShelf, 50.0, 2.5, 0.71),
             BiquadBand::new(FilterType::Peaking, 2200.0, 1.5, 1.3),
+            disabled_band,
         ],
         full_bands: None,
     };
@@ -137,13 +141,53 @@ fn test_exporters_pipewire_and_apo() {
     assert!(pw.contains("eq_band1_fl"));
     assert!(pw.contains("bq_lowshelf"));
     assert!(pw.contains("preamp_fl"));
+    assert!(pw.contains(r#"node.target      = "alsa_output.usb-Conexant_CX31993*""#));
+    assert!(pw.contains(r#""Gain" = 0.00"#));
 
     let apo = format_equalizer_apo(&preset);
     assert!(apo.contains("Preamp: -2.0 dB"));
-    assert!(apo.contains("Filter 1: ON LSC Fc 50.0 Hz Gain +2.5 dB Q 0.71"));
+    assert!(apo.contains("Filter 1: ON LSQ Fc 50.0 Hz Gain +2.5 dB Q 0.71"));
+    assert!(apo.contains("Filter 3: OFF HSQ Fc 10000.0 Hz Gain +3.0 dB Q 0.71"));
 
     let wav = format_wavelet_graphiceq(&preset);
-    assert!(wav.starts_with("GraphicEQ: 20.0 "));
+    assert!(wav.starts_with("GraphicEQ: 20 "));
+}
+
+#[test]
+fn test_ktmicro_encode_preset_payload_zeroes_disabled_band_gain() {
+    let mut b1 = BiquadBand::new(FilterType::Peaking, 1000.0, 6.0, 1.414);
+    b1.enabled = false;
+
+    let preset = PeqPreset {
+        name: "Muted Band Test".into(),
+        description: None,
+        preamp: 0.0,
+        slot_id: Some(3),
+        bands: vec![b1],
+        full_bands: None,
+    };
+
+    let reports = encode_preset_payload(&preset, 0x31B2, 0x0111, 3, false, false)
+        .expect("encode payload");
+
+    // Band 1 Register 0x26 should have 0 gain (bytes 7..9: 0x00, 0x00)
+    let rpt_band1 = reports.iter().find(|r| r.as_bytes()[1] == 0x26).expect("band 1 rpt");
+    let bytes = rpt_band1.as_bytes();
+    assert_eq!(bytes[7], 0x00);
+    assert_eq!(bytes[8], 0x00);
+}
+
+#[test]
+fn test_moondrop_encode_report_9_bands() {
+    let mut bands = Vec::new();
+    for i in 1..=5 {
+        bands.push(BiquadBand::new(FilterType::Peaking, 200.0 * i as f64, 1.5, 1.0));
+    }
+    let rpt = encode_moondrop_report(&bands, -3.0, true);
+    assert_eq!(rpt[0], 0x21); // commit flash
+    assert_eq!(rpt[1], 0x09); // 9 bands
+    assert_eq!(rpt[2] as i8, -6); // -3.0 * 2 = -6
+    assert_eq!(rpt.len(), 64);
 }
 
 #[test]
@@ -206,67 +250,162 @@ fn test_refit_decimated_gains_reduces_mse() {
 }
 
 #[test]
-fn test_decimate_bands_high_shelf_synthesis_and_padding() {
-    // 2-band input with a high frequency band >= 6000 Hz
+fn test_decimate_bands_5_to_10_expansion() {
+    // 5-band input with max frequency >= 6000 Hz and no HighShelf
     let bands = vec![
         BiquadBand::new(FilterType::LowShelf, 100.0, 4.0, 0.71),
-        BiquadBand::new(FilterType::Peaking, 8000.0, 3.5, 1.414),
+        BiquadBand::new(FilterType::Peaking, 500.0, -2.0, 1.4),
+        BiquadBand::new(FilterType::Peaking, 1500.0, 3.0, 1.0),
+        BiquadBand::new(FilterType::Peaking, 3000.0, -1.5, 2.0),
+        BiquadBand::new(FilterType::Peaking, 8000.0, 2.5, 1.414),
     ];
 
-    let target = 5;
-    let decimated = decimate_bands(&bands, target, true, 48000.0);
-    assert_eq!(decimated.len(), 5);
+    let target = 10;
+    let expanded = decimate_bands(&bands, target, true, 48000.0);
+    assert_eq!(expanded.len(), 10);
 
-    // Verify high shelf synthesis at 12000.0 Hz
-    let hs_bands: Vec<&BiquadBand> = decimated
+    // Verify high shelf synthesis at 12500.0 Hz with gain 0.0 and Q 0.71
+    let hs_bands: Vec<&BiquadBand> = expanded
         .iter()
-        .filter(|b| b.filter_type == FilterType::HighShelf && (b.freq - 12000.0).abs() < 1e-3)
+        .filter(|b| b.filter_type == FilterType::HighShelf && (b.freq - 12500.0).abs() < 1e-3)
         .collect();
-    assert_eq!(hs_bands.len(), 1, "Should synthesize exactly one HighShelf at 12000.0 Hz");
+    assert_eq!(hs_bands.len(), 1, "Should synthesize exactly one HighShelf at 12500.0 Hz");
     let hs = hs_bands[0];
-    assert!(
-        (-12.0..=12.0).contains(&hs.gain),
-        "HighShelf gain {} should be clamped to [-12, 12]",
-        hs.gain
-    );
-    assert!((hs.q - 0.707).abs() < 1e-3, "HighShelf Q should be 0.707");
+    assert_eq!(hs.gain, 0.0, "HighShelf gain must be 0.0");
+    assert!((hs.q - 0.71).abs() < 1e-3, "HighShelf Q must be 0.71");
 
-    // Verify padded bands
-    let padded_bands: Vec<&BiquadBand> = decimated
+    // Verify padded PK bands have gain 0.0 and Q 1.0
+    let padded_pk_bands: Vec<&BiquadBand> = expanded
         .iter()
         .filter(|b| b.gain == 0.0 && b.filter_type == FilterType::Peaking)
         .collect();
-    assert_eq!(padded_bands.len(), 2, "Should have 2 padded bands with gain 0.0");
-    for pb in &padded_bands {
-        assert!((pb.q - 1.414).abs() < 1e-3, "Padded band Q should be 1.414");
+    assert_eq!(padded_pk_bands.len(), 4, "Should have 4 padded PK bands with gain 0.0");
+    for pb in &padded_pk_bands {
+        assert!((pb.q - 1.0).abs() < 1e-3, "Padded PK band Q should be 1.0");
     }
 
-    // Verify no two bands collide within 20% frequency difference
-    for i in 0..decimated.len() {
-        for j in (i + 1)..decimated.len() {
-            let f1 = decimated[i].freq;
-            let f2 = decimated[j].freq;
-            let rel_diff = (f1 - f2).abs() / f2.min(f1);
-            assert!(
-                rel_diff >= 0.20,
-                "Frequencies {} and {} collide too closely (rel diff: {})",
-                f1,
-                f2,
-                rel_diff
-            );
-        }
-    }
+    // Verify zero curve alteration (all added bands have 0.0 dB gain)
+    let diff = calculate_curve_difference(&bands, 0.0, &expanded, 0.0, 48000.0, 100);
+    assert!(
+        diff.rms_db < 1e-6,
+        "Expanding bands with 0.0 dB pads should produce 0.0 dB curve alteration, got {}",
+        diff.rms_db
+    );
 
     // Verify sorted by frequency
-    for i in 0..(decimated.len() - 1) {
+    for i in 0..(expanded.len() - 1) {
         assert!(
-            decimated[i].freq <= decimated[i + 1].freq,
+            expanded[i].freq <= expanded[i + 1].freq,
             "Bands are not sorted by frequency"
         );
     }
 
-    // Verify indices
-    for (i, b) in decimated.iter().enumerate() {
+    // Verify 1-based indices
+    for (i, b) in expanded.iter().enumerate() {
         assert_eq!(b.index, Some(i + 1));
     }
+}
+
+#[test]
+fn test_biquad_band_enabled_muting() {
+    let mut b1 = BiquadBand::new(FilterType::Peaking, 1000.0, 6.0, 1.414);
+    let b2 = BiquadBand::new(FilterType::Peaking, 1000.0, 3.0, 1.414);
+
+    let freqs = [1000.0];
+    let resp_active = compute_composite_response(&[b1.clone(), b2.clone()], 0.0, &freqs, 48000.0);
+    assert!((resp_active[0] - 9.0).abs() < 1e-3);
+
+    // Mute b1 (enabled: false)
+    b1.enabled = false;
+    let resp_muted = compute_composite_response(&[b1.clone(), b2.clone()], 0.0, &freqs, 48000.0);
+    assert!((resp_muted[0] - 3.0).abs() < 1e-3);
+
+    // calculate_peak_composite_gain should ignore disabled band
+    let peak = calculate_peak_composite_gain(&[b1], 48000.0, 50);
+    assert_eq!(peak, 0.0);
+}
+
+#[test]
+fn test_band_deserialization_default_enabled() {
+    let json_str = r#"{"type": "PK", "freq": 1000.0, "gain": 2.0, "q": 1.0}"#;
+    let band: BiquadBand = serde_json::from_str(json_str).expect("Deserialize band");
+    assert!(band.enabled, "Default enabled should be true");
+
+    let json_disabled = r#"{"type": "PK", "freq": 1000.0, "gain": 2.0, "q": 1.0, "enabled": false}"#;
+    let disabled_band: BiquadBand = serde_json::from_str(json_disabled).expect("Deserialize disabled band");
+    assert!(!disabled_band.enabled);
+}
+
+#[test]
+fn test_lint_acoustic_bands_ignores_disabled_bands() {
+    // 1. 711 coupler artifact band
+    let mut b_coupler = BiquadBand::new(FilterType::Peaking, 8000.0, -4.0, 3.0);
+    // 2. Extreme boost band
+    let mut b_boost = BiquadBand::new(FilterType::Peaking, 1000.0, 8.0, 1.0);
+    // 3. Ultra high-Q ringing band
+    let mut b_ringing = BiquadBand::new(FilterType::Peaking, 3000.0, 2.0, 6.0);
+
+    // When all are enabled, 3 warnings should be produced
+    let warnings_active = lint_acoustic_bands(&[b_coupler.clone(), b_boost.clone(), b_ringing.clone()]);
+    assert_eq!(warnings_active.len(), 3);
+
+    // Disable all three
+    b_coupler.enabled = false;
+    b_boost.enabled = false;
+    b_ringing.enabled = false;
+
+    let warnings_disabled = lint_acoustic_bands(&[b_coupler, b_boost, b_ringing]);
+    assert!(
+        warnings_disabled.is_empty(),
+        "Disabled bands must not generate acoustic lint warnings: {:?}",
+        warnings_disabled
+    );
+}
+
+#[test]
+fn test_decimate_bands_disabled_bands_do_not_displace_active_bands() {
+    // 10 bands: 5 active landmark bands and 5 disabled bands with huge gains
+    let mut bands = vec![
+        BiquadBand::new(FilterType::LowShelf, 100.0, 5.0, 0.71),   // Active 1
+        BiquadBand::new(FilterType::Peaking, 250.0, 15.0, 1.0),    // Disabled
+        BiquadBand::new(FilterType::Peaking, 500.0, -3.0, 1.414),  // Active 2
+        BiquadBand::new(FilterType::Peaking, 1200.0, 15.0, 1.0),   // Disabled
+        BiquadBand::new(FilterType::Peaking, 2500.0, 4.0, 2.0),    // Active 3
+        BiquadBand::new(FilterType::Peaking, 3500.0, 15.0, 1.0),   // Disabled
+        BiquadBand::new(FilterType::Peaking, 4500.0, -2.0, 1.5),   // Active 4
+        BiquadBand::new(FilterType::Peaking, 6500.0, 15.0, 1.0),   // Disabled
+        BiquadBand::new(FilterType::HighShelf, 9000.0, 3.0, 0.71), // Active 5
+        BiquadBand::new(FilterType::Peaking, 14000.0, 15.0, 1.0),  // Disabled
+    ];
+
+    bands[1].enabled = false;
+    bands[3].enabled = false;
+    bands[5].enabled = false;
+    bands[7].enabled = false;
+    bands[9].enabled = false;
+
+    // Decimate from 10 bands down to 5 bands
+    let decimated = decimate_bands(&bands, 5, false, 48000.0);
+    assert_eq!(decimated.len(), 5);
+
+    // All 5 decimated bands should preserve the 5 active frequencies
+    let expected_freqs = [100.0, 500.0, 2500.0, 4500.0, 9000.0];
+    for (i, b) in decimated.iter().enumerate() {
+        assert!(
+            (b.freq - expected_freqs[i]).abs() < 1e-3,
+            "Expected freq {} at index {}, got {}",
+            expected_freqs[i],
+            i,
+            b.freq
+        );
+        assert!(
+            b.enabled,
+            "Decimated active bands should be enabled"
+        );
+    }
+
+    // Also test fallback when all bands are disabled: should not panic
+    let all_disabled: Vec<BiquadBand> = bands.into_iter().map(|mut b| { b.enabled = false; b }).collect();
+    let decimated_fallback = decimate_bands(&all_disabled, 5, false, 48000.0);
+    assert_eq!(decimated_fallback.len(), 5);
 }

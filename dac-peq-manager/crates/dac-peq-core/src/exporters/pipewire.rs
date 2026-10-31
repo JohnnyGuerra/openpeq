@@ -52,17 +52,18 @@ pub fn format_pipewire_filter_chain(
             FilterType::HighShelf => "bq_highshelf",
             FilterType::Bypass => "bq_peaking",
         };
+        let eff_gain = if b.enabled { b.gain } else { 0.0 };
 
         nodes.push(format!(
-            r#"                    # Band {}: {:?} {:.1} Hz, {:+.1} dB, Q={:.2}
+            r#"                    # Band {}: {} {:.0}Hz {:+.1}dB Q={:.2}
                     {{
                         type   = builtin
                         name   = "eq_band{}_fl"
                         label  = {}
                         control = {{
                             "Freq" = {:.1}
-                            "Gain" = {:+.1}
                             "Q"    = {:.2}
+                            "Gain" = {:.2}
                         }}
                     }}
                     {{
@@ -71,13 +72,13 @@ pub fn format_pipewire_filter_chain(
                         label  = {}
                         control = {{
                             "Freq" = {:.1}
-                            "Gain" = {:+.1}
                             "Q"    = {:.2}
+                            "Gain" = {:.2}
                         }}
                     }}"#,
-            b_idx, b.filter_type, b.freq, b.gain, b.q,
-            b_idx, label, b.freq, b.gain, b.q,
-            b_idx, label, b.freq, b.gain, b.q
+            b_idx, b.filter_type.as_str(), b.freq, b.gain, b.q,
+            b_idx, label, b.freq, b.q, eff_gain,
+            b_idx, label, b.freq, b.q, eff_gain
         ));
     }
 
@@ -134,7 +135,7 @@ context.modules = [
                 node.passive     = true
                 audio.channels   = 2
                 audio.position   = [ FL FR ]
-                target.object    = "{sink_target}"
+                node.target      = "{sink_target}"
             }}
         }}
     }}

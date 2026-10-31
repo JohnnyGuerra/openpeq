@@ -340,7 +340,10 @@ export function searchAutoEqEntries(entries, query, sourceFilter = "", maxResult
 
 export function parseAutoEqReadme(text) {
   let preamp = 0.0;
-  const preampMatch = text.match(/Apply preamp of\s+([+-]?\d+(?:\.\d+)?)\s*dB(?:\s+or\s+([+-]?\d+(?:\.\d+)?)\s*dB)?/i);
+  const readmeText = String(text || "");
+  const preampMatch =
+    readmeText.match(/apply preamp of\s+([+-]?\d+(?:\.\d+)?)\s*dB/i) ||
+    readmeText.match(/with\s+([+-]?\d+(?:\.\d+)?)\s*dB\s+preamp/i);
   if (preampMatch) {
     preamp = parseFloat(preampMatch[1]);
   }

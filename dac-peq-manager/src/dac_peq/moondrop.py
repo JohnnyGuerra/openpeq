@@ -33,6 +33,7 @@ class MockMoondropDevice:
         self.product_id = product_id
         self.is_open = True
         self.written_reports: List[List[int]] = []
+        self.raw_reports: List[List[int]] = []
         self.commit_count = 0
         
         # Default 9-band flat frame
@@ -50,11 +51,16 @@ class MockMoondropDevice:
 
     def write(self, data: Sequence[int]) -> int:
         pkt = list(data)
-        self.written_reports.append(pkt)
-        if pkt:
-            if pkt[0] in (0x20, 0x21):
-                self.last_payload = list(pkt)
-                if pkt[0] == 0x21:
+        self.raw_reports.append(pkt)
+        if len(pkt) == 65 and pkt[0] == 0x00:
+            payload = pkt[1:]
+        else:
+            payload = pkt
+        self.written_reports.append(payload)
+        if payload:
+            if payload[0] in (0x20, 0x21):
+                self.last_payload = list(payload)
+                if payload[0] == 0x21:
                     self.commit_count += 1
         return len(data)
 
@@ -158,9 +164,11 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
         # Write each band (5 bytes per band: Type[1], Freq[2], Gain[1], Q[1])
         offset = 4
         for b in bands[:self.max_bands]:
+            enabled = b.get("enabled", True)
+            eff_gain = float(b.get("gain", 0.0)) if enabled else 0.0
             ftype = self.TYPE_MAP.get(str(b.get("type", "PK")).upper(), 0)
             freq = int(round(float(b.get("freq", 1000.0))))
-            gain = int(round(float(b.get("gain", 0.0)) * 10.0))
+            gain = int(round(eff_gain * 10.0))
             if gain < 0:
                 gain += 256
             q_val = int(round(float(b.get("q", 1.0)) * 10.0)) & 0xFF
@@ -175,7 +183,7 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
         if not hasattr(self, "_dev") or not self._dev:
             raise DeviceCommunicationError("Device not connected.")
 
-        self._dev.write(payload)
+        self._dev.write([self.REPORT_ID] + payload)
         if commit_flash:
             time.sleep(0.5)
 
@@ -189,7 +197,7 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
             req = [0x00] * 64
             req[0] = 0x22
             try:
-                self._dev.write(req)
+                self._dev.write([self.REPORT_ID] + req)
             except Exception:
                 pass
 

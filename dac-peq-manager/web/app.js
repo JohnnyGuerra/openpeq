@@ -17,7 +17,7 @@ import {
   decimateBands,
   applyMacroAdjustments,
   smoothCouplerBiquads,
-} from "./modules/biquad_math.js?v=20261030_10";
+} from "./modules/biquad_math.js";
 
 import {
   formatPipeWireConf,
@@ -76,8 +76,8 @@ export function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
-// ── Built-in Presets ───────────────────────────────────────────────────────────
-const PRESETS = {
+// ── Built-in Presets Catalog ──────────────────────────────────────────────────
+export const PRESETS = {
   bmasterx6: {
     name: "BASN BmasterX 6",
     slug: "bmasterx6",
@@ -552,9 +552,13 @@ function renderCurve() {
     circle.setAttribute("cx", x);
     circle.setAttribute("cy", y);
     circle.setAttribute("r", width < 480 ? 7.5 : 6);
-    circle.setAttribute("fill", "var(--accent-cyan)");
-    circle.setAttribute("stroke", "#ffffff");
+    circle.setAttribute("fill", b.enabled === false ? "var(--bg-tertiary, #475569)" : "var(--accent-cyan)");
+    circle.setAttribute("stroke", b.enabled === false ? "#94a3b8" : "#ffffff");
     circle.setAttribute("stroke-width", 2);
+    if (b.enabled === false) {
+      circle.setAttribute("opacity", "0.45");
+      circle.setAttribute("stroke-dasharray", "2,2");
+    }
     circle.setAttribute("class", "band-marker");
 
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -564,6 +568,9 @@ function renderCurve() {
     text.setAttribute("fill", "var(--text-primary)");
     text.setAttribute("font-size", "11px");
     text.setAttribute("font-weight", "bold");
+    if (b.enabled === false) {
+      text.setAttribute("opacity", "0.45");
+    }
     text.textContent = i + 1;
 
     group.appendChild(hitCircle);
@@ -608,6 +615,32 @@ function renderCurve() {
   updateWebAudioFilters();
 }
 
+let dragRafId = null;
+
+export function scheduleDragRender(index) {
+  if (dragRafId !== null) return;
+  const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+  dragRafId = raf(() => {
+    dragRafId = null;
+    syncBandControls(index);
+    renderCurve();
+    triggerAutoApply();
+  });
+}
+
+export function flushDragRender() {
+  if (dragRafId !== null) {
+    const caf = typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout;
+    caf(dragRafId);
+    dragRafId = null;
+  }
+  if (activeDragIndex !== null) {
+    syncBandControls(activeDragIndex);
+    renderCurve();
+    triggerAutoApply();
+  }
+}
+
 function startDrag(e, index) {
   e.preventDefault();
   activeDragIndex = index;
@@ -622,9 +655,10 @@ function startDragTouch(e, index) {
   window.addEventListener("touchend", onDragTouchEnd);
 }
 
-function onDragMove(e) {
+export function onDragMove(e) {
   if (activeDragIndex === null) return;
   const svg = document.getElementById("eqSvg");
+  if (!svg) return;
   const rect = svg.getBoundingClientRect();
   const width = rect.width;
   const height = rect.height;
@@ -638,16 +672,15 @@ function onDragMove(e) {
   currentPreset.bands[activeDragIndex].freq = Math.max(20, Math.min(20000, newFreq));
   currentPreset.bands[activeDragIndex].gain = Math.max(-12, Math.min(12, newGain));
 
-  syncBandControls(activeDragIndex);
-  renderCurve();
-  triggerAutoApply();
+  scheduleDragRender(activeDragIndex);
 }
 
-function onDragTouchMove(e) {
+export function onDragTouchMove(e) {
   if (activeDragIndex === null || !e.touches[0]) return;
   e.preventDefault();
   const touch = e.touches[0];
   const svg = document.getElementById("eqSvg");
+  if (!svg) return;
   const rect = svg.getBoundingClientRect();
   const width = rect.width;
   const height = rect.height;
@@ -661,18 +694,18 @@ function onDragTouchMove(e) {
   currentPreset.bands[activeDragIndex].freq = Math.max(20, Math.min(20000, newFreq));
   currentPreset.bands[activeDragIndex].gain = Math.max(-12, Math.min(12, newGain));
 
-  syncBandControls(activeDragIndex);
-  renderCurve();
-  triggerAutoApply();
+  scheduleDragRender(activeDragIndex);
 }
 
-function onDragEnd() {
+export function onDragEnd() {
+  flushDragRender();
   activeDragIndex = null;
   window.removeEventListener("mousemove", onDragMove);
   window.removeEventListener("mouseup", onDragEnd);
 }
 
-function onDragTouchEnd() {
+export function onDragTouchEnd() {
+  flushDragRender();
   activeDragIndex = null;
   window.removeEventListener("touchmove", onDragTouchMove);
   window.removeEventListener("touchend", onDragTouchEnd);
@@ -969,7 +1002,8 @@ async function applyToDevice(commitFlash = false) {
       const slot = 101; // Walkplay default user preset slot
       for (let i = 0; i < bandCount; i++) {
         const b = currentPreset.bands[i] || { type: "PK", freq: 1000, gain: 0, q: 1.0 };
-        const pkt = encodeWalkplayFilterPacket(i, b.freq, b.gain, b.q, b.type, slot);
+        const effGain = b.enabled === false ? 0.0 : b.gain;
+        const pkt = encodeWalkplayFilterPacket(i, b.freq, effGain, b.q, b.type, slot);
         if (isDemoMode) {
           console.log(`[Demo Mode WalkPlay Filter ${i} Tx]:`, pkt);
         } else {
@@ -1033,7 +1067,8 @@ async function applyToDevice(commitFlash = false) {
     // 2. Write 5 bands
     for (let i = 0; i < 5; i++) {
       const b = currentPreset.bands[i] || { type: "PK", freq: 1000, gain: 0, q: 1.0 };
-      const { regGf, regQ, gfData, qData } = encodeKtMicroBandPackets(i, b, compensate2X);
+      const effGain = b.enabled === false ? 0.0 : b.gain;
+      const { regGf, regQ, gfData, qData } = encodeKtMicroBandPackets(i, { ...b, gain: effGain }, compensate2X);
       await sendHidReport(REPORT_ID, regGf, CMD_WRITE, ...gfData);
       await sendHidReport(REPORT_ID, regQ, CMD_WRITE, ...qData);
     }
@@ -1175,6 +1210,7 @@ function exportBackupPreset() {
       freq: Math.round(Number(b.freq) || 1000),
       gain: Math.round((Number(b.gain) || 0.0) * 10) / 10,
       q: Math.round((Number(b.q) || 1.0) * 100) / 100,
+      enabled: b.enabled !== false,
     })),
   };
   const dacFilterEl = document.getElementById("selDacFilter");
@@ -1222,6 +1258,7 @@ function tryLoadPresetFromUrl() {
         freq: Number(b.freq) || 1000.0,
         gain: Number(b.gain) || 0.0,
         q: Number(b.q) || 1.0,
+        enabled: b.enabled !== false,
       }));
       const finalBands = rawBands.length > activeHardwareBands
         ? decimateBands(rawBands, activeHardwareBands)
@@ -1354,6 +1391,10 @@ function buildControlsUI() {
         <div class="band-num">
           <span class="band-pill">${i + 1}</span> Band ${i + 1}
         </div>
+        <label class="checkbox-label" style="font-size: 0.72rem; margin-left: auto; gap: 0.25rem;" title="Mute/unmute this band">
+          <input type="checkbox" id="enable_${i}" ${b.enabled !== false ? "checked" : ""}>
+          <span id="lblEnable_${i}">${b.enabled !== false ? "Active" : "Muted"}</span>
+        </label>
         <select id="type_${i}" aria-label="Band ${i + 1} Filter Type" style="width: 100px;">
           <option value="PK" ${b.type === "PK" ? "selected" : ""}>Peaking</option>
           <option value="LSQ" ${b.type === "LSQ" ? "selected" : ""}>Low-Shelf</option>
@@ -1386,6 +1427,14 @@ function buildControlsUI() {
       </div>
     `;
     container.appendChild(card);
+
+    document.getElementById(`enable_${i}`)?.addEventListener("change", (e) => {
+      currentPreset.bands[i].enabled = e.target.checked;
+      const lbl = document.getElementById(`lblEnable_${i}`) || e.target.parentElement?.querySelector("span");
+      if (lbl) lbl.textContent = e.target.checked ? "Active" : "Muted";
+      renderCurve();
+      triggerAutoApply();
+    });
 
     document.getElementById(`type_${i}`).addEventListener("change", (e) => {
       currentPreset.bands[i].type = e.target.value;
@@ -1441,6 +1490,11 @@ function syncBandControls(i) {
   if (gainEl) gainEl.value = b.gain;
   if (qEl) qEl.value = b.q;
   if (typeEl) typeEl.value = b.type;
+
+  const enEl = document.getElementById(`enable_${i}`);
+  const lblEn = document.getElementById(`lblEnable_${i}`);
+  if (enEl) enEl.checked = b.enabled !== false;
+  if (lblEn) lblEn.textContent = b.enabled !== false ? "Active" : "Muted";
 
   const lblFreq = document.getElementById(`lblFreq_${i}`);
   const lblGain = document.getElementById(`lblGain_${i}`);
@@ -1620,7 +1674,8 @@ function connectSourceThroughDspChain(sourceNode, baseVolumeMultiplier = 1.0) {
     const filt = ctx.createBiquadFilter();
     filt.type = getWebAudioFilterType(b.type);
     filt.frequency.setValueAtTime(Math.max(20, Math.min(20000, Number(b.freq) || 1000)), ctx.currentTime);
-    filt.gain.setValueAtTime(Number(b.gain) || 0.0, ctx.currentTime);
+    const effGain = b.enabled === false ? 0.0 : (Number(b.gain) || 0.0);
+    filt.gain.setValueAtTime(effGain, ctx.currentTime);
     filt.Q.setValueAtTime(Math.max(0.1, Math.min(20, Number(b.q) || 1.0)), ctx.currentTime);
     lastNode.connect(filt);
     lastNode = filt;
@@ -1652,7 +1707,8 @@ function updateWebAudioFilters() {
     const typeStr = getWebAudioFilterType(b.type);
     if (filt.type !== typeStr) filt.type = typeStr;
     filt.frequency.setValueAtTime(Math.max(20, Math.min(20000, Number(b.freq) || 1000)), now);
-    filt.gain.setValueAtTime(Number(b.gain) || 0.0, now);
+    const effGain = b.enabled === false ? 0.0 : (Number(b.gain) || 0.0);
+    filt.gain.setValueAtTime(effGain, now);
     filt.Q.setValueAtTime(Math.max(0.1, Math.min(20, Number(b.q) || 1.0)), now);
   }
 }
@@ -2053,17 +2109,51 @@ async function loadDacDatabase() {
   }
 }
 
-function findDacInDatabase(vid, pid, prodName = "") {
+export function findDacInDatabase(vid, pid, prodName = "") {
+  if (!vid) return null;
   const catalog = dacCatalog.length > 0 ? dacCatalog : DEFAULT_DACS;
-  for (const d of catalog) {
-    if (d.vid === vid && (d.pid === pid || !d.pid)) return d;
+  const pLower = (prodName || "").toLowerCase().trim();
+
+  // Pass 1: exact VID + PID with matching prodName
+  if (pLower) {
+    for (const d of catalog) {
+      if (d.vid === vid && d.pid === pid) {
+        const dName = (d.name || "").toLowerCase();
+        const dBrand = (d.brand || "").toLowerCase();
+        if (pLower.includes(dName) || dName.includes(pLower) || (dBrand && pLower.includes(dBrand))) {
+          return d;
+        }
+      }
+    }
   }
-  const pLower = (prodName || "").toLowerCase();
+
+  // Pass 2: exact VID + PID match
   for (const d of catalog) {
-    if (pLower && (pLower.includes(d.name.toLowerCase()) || d.name.toLowerCase().includes(pLower))) {
+    if (d.vid === vid && d.pid === pid && d.pid !== null && d.pid !== undefined) {
       return d;
     }
   }
+
+  // Pass 3: VID match with prodName substring match
+  if (pLower) {
+    for (const d of catalog) {
+      if (d.vid === vid) {
+        const dName = (d.name || "").toLowerCase();
+        const dBrand = (d.brand || "").toLowerCase();
+        if (pLower.includes(dName) || dName.includes(pLower) || (dBrand && pLower.includes(dBrand))) {
+          return d;
+        }
+      }
+    }
+  }
+
+  // Pass 4: Wildcard VID match (where d.pid is null or undefined)
+  for (const d of catalog) {
+    if (d.vid === vid && (d.pid === null || d.pid === undefined)) {
+      return d;
+    }
+  }
+
   return null;
 }
 
@@ -2159,6 +2249,31 @@ function showToast(msg) {
   toast._timer = setTimeout(() => {
     toast.classList.remove("show");
   }, 3200);
+}
+
+// ── Preset Object Loader ──────────────────────────────────────────────────────
+export function loadPresetObject(parsed, defaultName = "custom_preset") {
+  if (!parsed || !Array.isArray(parsed.bands)) {
+    throw new Error("Invalid preset format: missing 'bands' array.");
+  }
+  currentPreset = {
+    name: parsed.name || defaultName,
+    slug: (parsed.slug || defaultName.replace(/[^a-z0-9_-]/gi, "_")).toLowerCase(),
+    description: parsed.description || "Imported custom PEQ preset",
+    preamp: typeof parsed.preamp === "number" ? parsed.preamp : 0.0,
+    bands: parsed.bands.map((b, i) => ({
+      type: b.type || "PK",
+      freq: Number(b.freq) || 1000,
+      gain: Number(b.gain) || 0,
+      q: Number(b.q) || 1.0,
+      enabled: b.enabled !== false,
+    })),
+  };
+  return currentPreset;
+}
+
+export function getCurrentPreset() {
+  return currentPreset;
 }
 
 // ── Initialization ────────────────────────────────────────────────────────────
@@ -2402,21 +2517,7 @@ window.addEventListener("DOMContentLoaded", () => {
         // Fall back to GraphWorks / Equalizer APO / Peace / CSV parser
         parsed = parseParametricEq(text, file.name.replace(/\.[^/.]+$/, ""));
       }
-      if (!parsed || !Array.isArray(parsed.bands)) {
-        throw new Error("Invalid preset format: missing 'bands' array.");
-      }
-      currentPreset = {
-        name: parsed.name || file.name.replace(/\.[^/.]+$/, ""),
-        slug: (parsed.slug || file.name.replace(/[^a-z0-9_-]/gi, "_")).toLowerCase(),
-        description: parsed.description || "Imported custom PEQ preset",
-        preamp: typeof parsed.preamp === "number" ? parsed.preamp : 0.0,
-        bands: parsed.bands.map((b, i) => ({
-          type: b.type || "PK",
-          freq: Number(b.freq) || 1000,
-          gain: Number(b.gain) || 0,
-          q: Number(b.q) || 1.0,
-        })),
-      };
+      loadPresetObject(parsed, file.name.replace(/\.[^/.]+$/, ""));
       if (parsed.slot_id) {
         const selSlot = document.getElementById("selHardwareSlot");
         if (selSlot) selSlot.value = String(parsed.slot_id);

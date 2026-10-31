@@ -99,8 +99,9 @@ pub fn encode_biquad_band(
         band.freq.round() as u16
     };
 
-    // Gain in tenths of a dB (signed 16-bit)
-    let gain_tenth = (band.gain * 10.0).round() as i16;
+    // Gain in tenths of a dB (signed 16-bit) - muted to 0.0 dB if band is disabled
+    let eff_gain = if band.enabled { band.gain } else { 0.0 };
+    let gain_tenth = (eff_gain * 10.0).round() as i16;
     let freq_bytes = eff_freq.to_le_bytes();
     let gain_bytes = gain_tenth.to_le_bytes();
 

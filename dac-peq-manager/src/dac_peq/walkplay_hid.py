@@ -289,10 +289,12 @@ class WalkPlayDSPDevice(BaseDSPDevice):
 
         # Write each filter
         for i, band in enumerate(bands):
+            enabled = band.get("enabled", True)
+            eff_gain = float(band.get("gain", 0.0)) if enabled else 0.0
             pkt = encode_walkplay_filter_packet(
                 filter_idx=i,
                 freq=float(band.get("freq", 1000)),
-                gain=float(band.get("gain", 0.0)),
+                gain=eff_gain,
                 q=float(band.get("q", 1.0)),
                 filter_type=str(band.get("type", "PK")),
                 slot=slot,

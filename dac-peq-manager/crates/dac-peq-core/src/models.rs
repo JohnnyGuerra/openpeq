@@ -80,10 +80,16 @@ impl<'de> Deserialize<'de> for FilterType {
     }
 }
 
+fn default_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BiquadBand {
     #[serde(default)]
     pub index: Option<usize>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(rename = "type")]
     pub filter_type: FilterType,
     pub freq: f64,
@@ -95,6 +101,7 @@ impl BiquadBand {
     pub fn new(filter_type: FilterType, freq: f64, gain: f64, q: f64) -> Self {
         Self {
             index: None,
+            enabled: true,
             filter_type,
             freq,
             gain,

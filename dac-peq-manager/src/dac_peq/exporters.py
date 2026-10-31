@@ -97,7 +97,7 @@ def format_pipewire_filter_chain(
         b_idx = i + 1
         ftype = type_map.get(str(b.get("type", "PK")).upper(), "bq_peaking")
         freq = float(b.get("freq", 1000.0))
-        gain = float(b.get("gain", 0.0))
+        gain = float(b.get("gain", 0.0)) if b.get("enabled", True) else 0.0
         q = float(b.get("q", 1.0))
         comment = b.get("comment", f"Band {b_idx}")
 
@@ -241,7 +241,8 @@ def format_equalizer_apo(preset: Dict[str, Any], auto_preamp: bool = False) -> s
         freq = float(b.get("freq", 1000.0))
         gain = float(b.get("gain", 0.0))
         q = float(b.get("q", 1.0))
-        lines.append(f"Filter {idx}: ON {ftype} Fc {freq:.1f} Hz Gain {gain:+.1f} dB Q {q:.2f}")
+        state = "ON" if b.get("enabled", True) else "OFF"
+        lines.append(f"Filter {idx}: {state} {ftype} Fc {freq:.1f} Hz Gain {gain:+.1f} dB Q {q:.2f}")
 
     return "\n".join(lines) + "\n"
 
@@ -505,10 +506,12 @@ def parse_parametric_eq(raw_text: str, default_name: str = "imported_peq") -> Di
         "PEAK": "PK",
         "PEAKING": "PK",
         "LS": "LSQ",
+        "LSC": "LSQ",
         "LSQ": "LSQ",
         "LOW_SHELF": "LSQ",
         "LOWSHELF": "LSQ",
         "HS": "HSQ",
+        "HSC": "HSQ",
         "HSQ": "HSQ",
         "HIGH_SHELF": "HSQ",
         "HIGHSHELF": "HSQ",
@@ -795,7 +798,10 @@ def encode_preset_to_url_params(
         gain = round(max(-18.0, min(18.0, float(b.get("gain", 0.0)))), 2)
         q = round(max(0.1, min(10.0, float(b.get("q", 1.0)))), 2)
         freq_str = str(int(freq)) if freq == int(freq) else f"{freq:.1f}"
-        params.append((f"b{i + 1}", f"{ftype},{freq_str},{gain:.1f},{q:.2f}"))
+        if b.get("enabled", True) is False:
+            params.append((f"b{i + 1}", f"{ftype},{freq_str},{gain:.1f},{q:.2f},0"))
+        else:
+            params.append((f"b{i + 1}", f"{ftype},{freq_str},{gain:.1f},{q:.2f}"))
 
     return urlencode(params)
 
@@ -862,6 +868,10 @@ def decode_preset_from_url_params(
         if len(tokens) < 3:
             continue
         try:
+            enabled = True
+            if len(tokens) >= 5 and tokens[4].strip() in ("0", "false", "False", "off", "OFF"):
+                enabled = False
+
             if tokens[0].upper() in type_map:
                 ftype = type_map[tokens[0].upper()]
                 freq = float(tokens[1])
@@ -880,7 +890,7 @@ def decode_preset_from_url_params(
                 "freq": round(max(20.0, min(20000.0, freq)), 1),
                 "gain": round(max(-18.0, min(18.0, gain)), 2),
                 "q": round(max(0.1, min(10.0, q)), 2),
-                "enabled": True,
+                "enabled": enabled,
             })
         except ValueError:
             continue
@@ -894,6 +904,10 @@ def decode_preset_from_url_params(
                 if len(tokens) < 3:
                     continue
                 try:
+                    enabled = True
+                    if len(tokens) >= 5 and tokens[4].strip() in ("0", "false", "False", "off", "OFF"):
+                        enabled = False
+
                     if tokens[0].upper() in type_map:
                         ftype = type_map[tokens[0].upper()]
                         freq = float(tokens[1])
@@ -910,7 +924,7 @@ def decode_preset_from_url_params(
                         "freq": round(max(20.0, min(20000.0, freq)), 1),
                         "gain": round(max(-18.0, min(18.0, gain)), 2),
                         "q": round(max(0.1, min(10.0, q)), 2),
-                        "enabled": True,
+                        "enabled": enabled,
                     })
                 except ValueError:
                     continue

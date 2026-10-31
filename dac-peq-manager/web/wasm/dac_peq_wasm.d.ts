@@ -13,6 +13,8 @@ export function check_is_conexant_cx31993(vid: number, pid: number, product_name
 
 export function compute_composite_curve(bands_json: string, preamp_db: number, points: number, fs: number): Float64Array;
 
+export function compute_composite_curve_at_freqs(bands_json: string, preamp_db: number, freqs: Float64Array, fs: number): Float64Array;
+
 export function decimate_bands_json(bands_json: string, target_count: number, refit_gains?: boolean | null, fs?: number | null): string;
 
 export function decimate_preset_bands(preset_json: string, target_count: number, refit_gains?: boolean | null, fs?: number | null): string;
@@ -20,6 +22,8 @@ export function decimate_preset_bands(preset_json: string, target_count: number,
 export function encode_factory_reset_report(): Uint8Array;
 
 export function encode_ktmicro_payload(preset_json: string, vid: number, pid: number, slot_id: number, compensate_2x: boolean, commit_nvram: boolean): Array<any>;
+
+export function encode_moondrop_payload(preset_json: string, commit_flash: boolean): Uint8Array;
 
 export function encode_nvram_commit_report(): Uint8Array;
 
@@ -47,10 +51,12 @@ export interface InitOutput {
     readonly calculate_recommended_preamp: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly check_is_conexant_cx31993: (a: number, b: number, c: number, d: number) => number;
     readonly compute_composite_curve: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly compute_composite_curve_at_freqs: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly decimate_bands_json: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly decimate_preset_bands: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly encode_factory_reset_report: () => any;
     readonly encode_ktmicro_payload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly encode_moondrop_payload: (a: number, b: number, c: number) => [number, number, number];
     readonly encode_nvram_commit_report: () => any;
     readonly encode_walkplay_payload: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly export_apo_txt: (a: number, b: number) => [number, number, number, number];

@@ -441,6 +441,15 @@ class KTMicroDSPDevice(BaseDSPDevice):
             return True
         return False
 
+    def supports_dac_filter(self) -> bool:
+        """Return True strictly for FiiO JA11 (0x2972) or unconfigured mock devices."""
+        if self.is_allegro_mini_or_no_pregain():
+            return False
+        vid = self._vid if self._vid is not None else self.vendor_id
+        if vid is None and self.use_mock:
+            return True
+        return vid == 0x2972
+
     def connect(self):
         """Connect to target HID device with safety verification."""
         vid = self._vid if self._vid is not None else self.vendor_id
@@ -553,13 +562,11 @@ class KTMicroDSPDevice(BaseDSPDevice):
 
     def set_dac_filter(self, filter_name: str, commit_flash: bool = False) -> None:
         """Set hardware DAC reconstruction filter (FAST-LL, FAST-PC, SLOW-LL, SLOW-PC, NON-OS)."""
-        vid = self._vid if self._vid is not None else self.vendor_id
-        if vid == 0x31B2 or self.is_allegro_mini_or_no_pregain():
+        if not self.supports_dac_filter():
             raise ValueError(
-                "Register 0x11 (DAC reconstruction filter) is strictly a FiiO JA11 feature. "
-                "On KTMicro KT02H20 / Kiwi Ears Allegro Mini (0x31B2), writing to register 0x11 "
-                "directly overwrites the MCU's internal volume attenuation control, locking out "
-                "physical volume buttons on iOS/Android per GEMINI.md Rule 1."
+                "Register 0x11 (DAC reconstruction filter) is strictly a FiiO JA11 (0x2972) feature. "
+                "Writing to register 0x11 on non-FiiO KTMicro hardware is blocked to prevent volume "
+                "control lockout per GEMINI.md Rule 1."
             )
         idx = self.DAC_FILTERS.get(filter_name.upper())
         if not idx:
@@ -602,7 +609,8 @@ class KTMicroDSPDevice(BaseDSPDevice):
         # 2. Write 5 bands
         for i in range(5):
             band = bands[i]
-            gain = float(band.get("gain", 0.0))
+            enabled = band.get("enabled", True)
+            gain = float(band.get("gain", 0.0)) if enabled else 0.0
             freq = float(band.get("freq", 1000.0))
             if compensate_2x:
                 freq = freq / 2.0
@@ -722,25 +730,27 @@ class KTMicroDSPDevice(BaseDSPDevice):
         slot_resp = self._read_register(self.REG_SLOT)
         slot_id = slot_resp[6] if len(slot_resp) > 6 else 0x03
 
-        vid = self._vid if self._vid is not None else self.vendor_id
-        if vid == 0x31B2 or self.is_allegro_mini_or_no_pregain():
-            # Skip reading registers 0x66 and 0x11 per GEMINI.md Rule 1
+        # 2. Read preamp (0.5 dB step decoding: signed_byte / 2.0)
+        # Per GEMINI.md Rule 1: skip register 0x66 on Allegro Mini / no_pregain to prevent volume lockout
+        if self.is_allegro_mini_or_no_pregain():
             preamp_db = 0.0
-            filter_name = None
         else:
-            # 2. Read preamp (0.5 dB step decoding: signed_byte / 2.0)
             preamp_resp = self._read_register(self.REG_PREAMP)
             raw_preamp = preamp_resp[6] if len(preamp_resp) > 6 else 0
             signed_preamp = raw_preamp - 256 if raw_preamp > 127 else raw_preamp
             preamp_db = round(signed_preamp / 2.0, 1)
 
-            # 3. Read DAC reconstruction filter
+        # 3. Read DAC reconstruction filter (Register 0x11)
+        # Strictly a FiiO JA11 (0x2972) feature; skipped on other KTMicro devices to prevent volume lockout
+        if self.supports_dac_filter():
             try:
                 filter_resp = self._read_register(self.REG_DAC_FILTER, timeout_ms=200)
                 filter_idx = filter_resp[6] if len(filter_resp) > 6 else 1
                 filter_name = self.DAC_FILTERS_REV.get(filter_idx, f"FILTER_{filter_idx}")
             except Exception:
                 filter_name = "FAST-LL"
+        else:
+            filter_name = None
 
         # 4. Read 5 bands
         bands = []

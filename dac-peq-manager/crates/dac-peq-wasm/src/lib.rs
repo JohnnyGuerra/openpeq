@@ -41,6 +41,18 @@ pub fn compute_composite_curve(
 }
 
 #[wasm_bindgen]
+pub fn compute_composite_curve_at_freqs(
+    bands_json: &str,
+    preamp_db: f64,
+    freqs: &[f64],
+    fs: f64,
+) -> std::result::Result<Vec<f64>, JsValue> {
+    let bands: Vec<BiquadBand> = serde_json::from_str(bands_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid bands JSON: {e}")))?;
+    Ok(compute_composite_response(&bands, preamp_db, freqs, fs))
+}
+
+#[wasm_bindgen]
 pub fn calculate_peak_gain(bands_json: &str, fs: f64) -> std::result::Result<f64, JsValue> {
     let bands: Vec<BiquadBand> = serde_json::from_str(bands_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid bands JSON: {e}")))?;
@@ -148,10 +160,11 @@ pub fn encode_walkplay_payload(
 
     let arr = js_sys::Array::new();
     for (i, band) in preset.bands.iter().enumerate() {
+        let eff_gain = if band.enabled { band.gain } else { 0.0 };
         let pkt = dac_peq_core::codec::walkplay::encode_walkplay_filter_packet(
             i as u8,
             band.freq,
-            band.gain,
+            eff_gain,
             band.q,
             band.filter_type,
             slot_id,
@@ -159,16 +172,31 @@ pub fn encode_walkplay_payload(
         arr.push(&js_sys::Uint8Array::from(&pkt[..]));
     }
 
-    if commit_flash {
-        let gain_pkt = dac_peq_core::codec::walkplay::encode_walkplay_global_gain(preset.preamp);
-        arr.push(&js_sys::Uint8Array::from(&gain_pkt[..]));
+    let gain_pkt = dac_peq_core::codec::walkplay::encode_walkplay_global_gain(preset.preamp);
+    arr.push(&js_sys::Uint8Array::from(&gain_pkt[..]));
 
+    if commit_flash {
         for seq in dac_peq_core::codec::walkplay::get_walkplay_commit_sequence() {
             arr.push(&js_sys::Uint8Array::from(&seq[..]));
         }
     }
 
     Ok(arr)
+}
+
+#[wasm_bindgen]
+pub fn encode_moondrop_payload(
+    preset_json: &str,
+    commit_flash: bool,
+) -> std::result::Result<js_sys::Uint8Array, JsValue> {
+    let preset: PeqPreset = serde_json::from_str(preset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
+    let payload = dac_peq_core::codec::moondrop::encode_moondrop_report(
+        &preset.bands,
+        preset.preamp,
+        commit_flash,
+    );
+    Ok(js_sys::Uint8Array::from(&payload[..]))
 }
 
 #[wasm_bindgen]
@@ -218,4 +246,18 @@ pub fn export_wavelet_txt(preset_json: &str) -> std::result::Result<String, JsVa
     let preset: PeqPreset = serde_json::from_str(preset_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
     Ok(format_wavelet_graphiceq(&preset))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_composite_curve_at_freqs() {
+        let json = r#"[{"type":"PK","freq":1000.0,"gain":6.0,"q":1.414}]"#;
+        let freqs = vec![1000.0];
+        let curve = compute_composite_curve_at_freqs(json, 0.0, &freqs, 48000.0).expect("compute");
+        assert_eq!(curve.len(), 1);
+        assert!((curve[0] - 6.0).abs() < 1e-3);
+    }
 }

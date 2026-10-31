@@ -122,6 +122,7 @@ def parse_readme_peq(readme_text: str, max_bands: Optional[int] = 5) -> Tuple[fl
     """
     # 1. Preamp extraction
     # E.g. "Apply preamp of -6.2 dB or -6.1 dB, respectively." or "Apply preamp of -3.5 dB"
+    # or fallback "with -4.5 dB preamp"
     preamp = 0.0
     preamp_match = re.search(
         r"Apply preamp of\s+([+-]?\d+(?:\.\d+)?)\s*dB(?:\s+or\s+([+-]?\d+(?:\.\d+)?)\s*dB)?",
@@ -130,6 +131,14 @@ def parse_readme_peq(readme_text: str, max_bands: Optional[int] = 5) -> Tuple[fl
     )
     if preamp_match:
         preamp = float(preamp_match.group(1))
+    else:
+        fallback_match = re.search(
+            r"with\s+([+-]?\d+(?:\.\d+)?)\s*dB\s+preamp",
+            readme_text,
+            re.IGNORECASE,
+        )
+        if fallback_match:
+            preamp = float(fallback_match.group(1))
 
     # 2. Table extraction
     bands: List[Dict[str, Any]] = []
@@ -353,7 +362,7 @@ class AutoEqDatabase:
             {
                 "type": b["type"],
                 "freq": round(float(b["freq"]), 1),
-                "gain": round(float(b["gain"]), 1),
+                "gain": round(float(b["gain"]), 2),
                 "q": round(float(b["q"]), 2),
             }
             for b in bands
@@ -379,7 +388,7 @@ class AutoEqDatabase:
                 {
                     "type": b["type"],
                     "freq": round(float(b["freq"]), 1),
-                    "gain": round(float(b["gain"]), 1),
+                    "gain": round(float(b["gain"]), 2),
                     "q": round(float(b["q"]), 2),
                 }
                 for b in active_bands

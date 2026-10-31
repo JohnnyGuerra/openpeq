@@ -190,6 +190,7 @@ export function calculateCurveDifference(bandsA, preampA, bandsB, preampB, fs = 
 export function lintAcousticBands(bands) {
   const warnings = [];
   bands.forEach((b, i) => {
+    if (b.enabled === false) return;
     const idx = i + 1;
     const freq = Number(b.freq ?? 1000);
     const gain = Number(b.gain ?? 0);
@@ -299,6 +300,14 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
     return out.map((b, i) => ({ ...b, index: i + 1 }));
   }
 
+  // When bands.length > target:
+  const activeFiltered = bands.filter((b) => b.enabled !== false);
+  const activeBands = activeFiltered.length === 0 ? bands : activeFiltered;
+
+  if (activeBands.length <= target) {
+    return decimateBands(activeBands, target, false, fs);
+  }
+
   function score(b) {
     const g = Math.abs(Number(b.gain ?? 0.0));
     const f = Number(b.freq ?? 1000.0);
@@ -339,7 +348,7 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
   const used = new Set();
 
   for (const bin of bins) {
-    const candidates = bands
+    const candidates = activeBands
       .map((b, idx) => ({ b, idx }))
       .filter(({ b, idx }) => !used.has(idx) && Number(b.freq ?? 0.0) >= bin.lo && Number(b.freq ?? 0.0) < bin.hi);
     if (candidates.length > 0) {
@@ -351,7 +360,7 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
   }
 
   if (selected.length < target) {
-    const remaining = bands
+    const remaining = activeBands
       .map((b, idx) => ({ b, idx }))
       .filter(({ idx }) => !used.has(idx))
       .sort((a, b) => score(b.b) - score(a.b));
@@ -364,8 +373,8 @@ export function decimateBands(bands, targetBands = 5, refitGains = true, fs = 48
     }
   }
 
-  if (refitGains && bands.length > selected.length) {
-    selected = refitDecimatedGains(bands, selected, fs);
+  if (refitGains && activeBands.length > selected.length) {
+    selected = refitDecimatedGains(activeBands, selected, fs);
   }
 
   selected.sort((a, b) => Number(a.freq ?? 1000.0) - Number(b.freq ?? 1000.0));

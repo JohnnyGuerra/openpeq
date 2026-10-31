@@ -12,13 +12,15 @@ pub fn format_equalizer_apo(preset: &PeqPreset) -> String {
     for (i, b) in preset.bands.iter().enumerate() {
         let apo_type = match b.filter_type {
             FilterType::Peaking => "PK",
-            FilterType::LowShelf => "LSC",
-            FilterType::HighShelf => "HSC",
+            FilterType::LowShelf => "LSQ",
+            FilterType::HighShelf => "HSQ",
             FilterType::Bypass => "PK",
         };
+        let state = if b.enabled { "ON" } else { "OFF" };
         lines.push(format!(
-            "Filter {}: ON {} Fc {:.1} Hz Gain {:+.1} dB Q {:.2}",
+            "Filter {}: {} {} Fc {:.1} Hz Gain {:+.1} dB Q {:.2}",
             i + 1,
+            state,
             apo_type,
             b.freq,
             b.gain,

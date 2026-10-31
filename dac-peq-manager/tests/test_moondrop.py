@@ -108,3 +108,39 @@ def test_moondrop_freedsp_read_write_roundtrip():
         assert b9["gain"] == 1.8
         assert b9["q"] == 0.7
 
+
+def test_moondrop_freedsp_report_id_prefix_and_disabled_bands():
+    """Verify that MoondropFreeDSP sends 65-byte frame with 0x00 Report ID prefix and mutes disabled bands."""
+    dev = MoondropFreeDSPDevice(use_mock=True)
+    with dev:
+        preset = {
+            "name": "Disabled & Report ID Test",
+            "preamp": -1.0,
+            "bands": [
+                {"index": 1, "type": "PK", "freq": 1000.0, "gain": 4.5, "q": 1.0, "enabled": False},
+                {"index": 2, "type": "PK", "freq": 2000.0, "gain": 2.0, "q": 1.0, "enabled": True},
+            ],
+        }
+        dev.apply_preset(preset, commit_flash=False)
+
+        # 1. 65-byte frame with leading 0x00 Report ID prefix
+        assert len(dev._dev.raw_reports) == 1
+        raw_pkt = dev._dev.raw_reports[0]
+        assert len(raw_pkt) == 65
+        assert raw_pkt[0] == 0x00
+        assert raw_pkt[1] == 0x20  # Live command
+
+        # 2. Stripped 64-byte payload stored in written_reports
+        assert len(dev._dev.written_reports) == 1
+        report = dev._dev.written_reports[0]
+        assert len(report) == 64
+        assert report[0] == 0x20
+
+        # 3. Band 1 (disabled): offset 4 -> Type[4], Freq[5..6], Gain[7], Q[8]
+        gain_b1 = report[7]
+        assert gain_b1 == 0  # 0.0 dB (muted)
+
+        # 4. Band 2 (enabled): offset 9 -> Type[9], Freq[10..11], Gain[12], Q[13]
+        gain_b2 = report[12]
+        assert gain_b2 == 20  # +2.0 dB
+

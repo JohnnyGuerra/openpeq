@@ -155,18 +155,53 @@ class DACDatabase:
         """Return all catalogued DAC devices."""
         return list(self._dacs)
 
-    def lookup(self, vid: Optional[int], pid: Optional[int]) -> Optional[DACInfo]:
-        """Lookup DAC by exact USB Vendor ID and Product ID."""
+    def lookup(
+        self,
+        vid: Optional[int],
+        pid: Optional[int],
+        product_name: Optional[str] = None,
+    ) -> Optional[DACInfo]:
+        """Lookup DAC with multi-pass matching, disambiguating by product name when provided."""
         if vid is None:
             return None
+
+        clean_prod = product_name.strip().lower() if product_name and product_name.strip() else None
+
+        # 1. If product_name is provided and non-empty:
+        # Check for entry with d.vid == vid and d.pid == pid and (d.name.lower() in product_name.lower() or product_name.lower() in d.name.lower())
+        if clean_prod is not None:
+            for d in self._dacs:
+                if d.vid == vid and d.pid == pid:
+                    d_name = d.name.lower()
+                    if d_name in clean_prod or clean_prod in d_name:
+                        return d
+
+        # 2. Exact match: d.vid == vid and d.pid == pid and d.pid is not None
+        if pid is not None:
+            for d in self._dacs:
+                if d.vid == vid and d.pid == pid and d.pid is not None:
+                    return d
+
+        # 3. If product_name provided: entry where d.vid == vid and (d.name.lower() in product_name.lower() or product_name.lower() in d.name.lower())
+        if clean_prod is not None:
+            for d in self._dacs:
+                if d.vid == vid:
+                    d_name = d.name.lower()
+                    if d_name in clean_prod or clean_prod in d_name:
+                        return d
+
+        # 4. Fallback wildcard match: entry where d.vid == vid and d.pid is None
         for d in self._dacs:
-            if d.vid == vid and (pid is None or d.pid == pid or d.pid is None):
+            if d.vid == vid and d.pid is None:
                 return d
+
         return None
 
     def lookup_by_string(self, text: str) -> Optional[DACInfo]:
         """Lookup DAC by matching product name or chipset string."""
-        text_lower = text.lower()
+        if not text or not text.strip():
+            return None
+        text_lower = text.strip().lower()
         for d in self._dacs:
             if d.name.lower() in text_lower or text_lower in d.name.lower():
                 return d

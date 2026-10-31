@@ -272,6 +272,8 @@ def lint_acoustic_bands(bands: Sequence[dict]) -> List[str]:
     warnings: List[str] = []
 
     for i, b in enumerate(bands, 1):
+        if b.get("enabled", True) is False:
+            continue
         freq = float(b.get("freq", 1000.0))
         gain = float(b.get("gain", 0.0))
         q = float(b.get("q", 1.0))
@@ -484,6 +486,16 @@ def decimate_bands(
         return []
 
     target_bands = max(1, target_bands)
+
+    if len(bands) > target_bands:
+        active_bands = [b for b in bands if b.get("enabled", True)]
+        if not active_bands:
+            active_bands = list(bands)
+
+        if len(active_bands) <= target_bands:
+            return decimate_bands(active_bands, target_bands=target_bands, refit_gains=False, fs=fs)
+
+        bands = active_bands
 
     if len(bands) <= target_bands:
         out = [dict(b) for b in bands]
