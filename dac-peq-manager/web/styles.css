@@ -538,26 +538,28 @@ header {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
+  padding: 0.42rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
   font-weight: 600;
-  color: #f1f5f9;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   text-decoration: none;
   transition: all 0.2s ease;
+  user-select: none;
 }
 
 .star-link-btn:hover {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: var(--accent-yellow);
-  color: #fef08a;
+  background-color: var(--border-color);
+  border-color: light-dark(#f59e0b, #fbbf24);
+  color: var(--text-primary);
   transform: translateY(-1px);
 }
 
 .star-link-btn svg {
-  color: var(--accent-yellow);
+  color: light-dark(#d97706, #fbbf24);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
 }
 
 .generator-guide-dialog {
