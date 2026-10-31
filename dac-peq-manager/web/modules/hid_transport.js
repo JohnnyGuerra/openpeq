@@ -116,7 +116,7 @@ export function hasStockBackup(dev, slotId = 3, storage = globalThis.localStorag
 
 // ── Firmware Clock Divisor Quirk Prober ───────────────────────────────────────
 // NOTE: The W3C WebHID standard HIDDevice interface exposes vendorId, productId,
-// and productName, but does NOT expose bcdDevice or deviceVersion.
+// and productName, but does NOT expose bcdDevice or deviceVersion (audit credit: Captain Ødegard, Head-Fi).
 // Therefore, WebHID cannot inspect the device firmware revision directly.
 // We apply static heuristics based on VID/PID/product name:
 //   - Moondrop FreeDSP (0x31b2:0x0112): Standard clocking (requiresCompensate2X = false).

@@ -48,6 +48,15 @@
 
 ---
 
+### [Captain Ødegard (Head-Fi)](https://www.head-fi.org/members/captain-%C3%98degard.50466/)
+* **Contribution & Technical Code Audit:**
+  * Identified the 0.0 dB preamp write omission bug where setting gain to zero skipped register `0x66` writes, leaving prior digital attenuation active in the DAC.
+  * Discovered the WebHID `deviceVersion` / `bcdDevice` property hallucination, ensuring clock divisor compensation relies on real hardware heuristics and manual controls.
+  * Audited JA11 slot partition architecture (distinguishing read-only factory slots from the `USER1` / Slot 3 customizable profile).
+  * Flagged the v0.2.0 CLI mock/stub release issue and catalyzed the removal of hyperbolic marketing claims across the project.
+
+---
+
 ## 2. DSP Mathematics & Acoustic Engineering
 
 ### Audio EQ Cookbook (Robert Bristow-Johnson Biquad Formulae)

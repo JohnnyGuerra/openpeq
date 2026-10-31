@@ -1075,7 +1075,9 @@ async function applyToDevice(commitFlash = false) {
     }
 
     // 3. Preamp (Register 0x66 in 0.5 dB steps)
-    // Only write 0x66 if supported; Kiwi Ears Allegro Mini (0x31B2) uses unity gain (noPregain)
+    // Only write 0x66 if supported; Kiwi Ears Allegro Mini (0x31B2) uses unity gain (noPregain).
+    // Note: Always write 0x66 even when preamp is 0.0 dB (preampByte = 0x00) to clear prior digital
+    // attenuation from previous profiles (audit credit: Captain Ødegard, Head-Fi).
     const isKiwiMini = connectedHidDevice && (connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722);
     if (!isKiwiMini) {
       const preampByte = Math.round(currentPreset.preamp * 2.0) & 0xff;
