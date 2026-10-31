@@ -2,8 +2,32 @@
   {
     "path": "/JohnnyGuerra/dac-peq-manager",
     "title": "Overview",
-    "count": 34,
-    "uniques": 31
+    "count": 39,
+    "uniques": 35
+  },
+  {
+    "path": "/JohnnyGuerra/dac-peq-manager/blob/master/COMPATIBILITY.md",
+    "title": "/blob/master/COMPATIBILITY.md",
+    "count": 7,
+    "uniques": 5
+  },
+  {
+    "path": "/JohnnyGuerra/dac-peq-manager/releases/tag/v0.2.0",
+    "title": "/releases/tag/v0.2.0",
+    "count": 2,
+    "uniques": 2
+  },
+  {
+    "path": "/JohnnyGuerra/dac-peq-manager/issues/2",
+    "title": "/issues/2",
+    "count": 2,
+    "uniques": 1
+  },
+  {
+    "path": "/johnnyguerra/dac-peq-manager",
+    "title": "Overview",
+    "count": 2,
+    "uniques": 1
   },
   {
     "path": "/JohnnyGuerra/dac-peq-manager/actions",
@@ -30,32 +54,8 @@
     "uniques": 1
   },
   {
-    "path": "/JohnnyGuerra/dac-peq-manager/blob/master/COMPATIBILITY.md",
-    "title": "/blob/master/COMPATIBILITY.md",
-    "count": 1,
-    "uniques": 1
-  },
-  {
     "path": "/JohnnyGuerra/dac-peq-manager/blob/master/GEMINI.md",
     "title": "/blob/master/GEMINI.md",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "path": "/JohnnyGuerra/dac-peq-manager/blob/master/LICENSE",
-    "title": "/blob/master/LICENSE",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "path": "/JohnnyGuerra/dac-peq-manager/blob/master/README.md",
-    "title": "/blob/master/README.md",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "path": "/JohnnyGuerra/dac-peq-manager/commit/372993dda884f72e789f6b1c084d3b02f3bb1c72",
-    "title": "/commit/372993dda884f72e789f6b1c084d3b02f3bb1c72",
     "count": 1,
     "uniques": 1
   }

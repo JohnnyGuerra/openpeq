@@ -10,8 +10,8 @@
     "referrer": "github.com",
     "first_seen": "2026-10-29",
     "last_seen": "2026-10-31",
-    "count": 6,
-    "uniques": 5
+    "count": 11,
+    "uniques": 7
   },
   "app.raindrop.io": {
     "referrer": "app.raindrop.io",
@@ -40,5 +40,12 @@
     "last_seen": "2026-10-31",
     "count": 3,
     "uniques": 2
+  },
+  "search.brave.com": {
+    "referrer": "search.brave.com",
+    "first_seen": "2026-10-31",
+    "last_seen": "2026-10-31",
+    "count": 2,
+    "uniques": 1
   }
 }
