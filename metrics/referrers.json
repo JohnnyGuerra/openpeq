@@ -2,49 +2,49 @@
   "news.ycombinator.com": {
     "referrer": "news.ycombinator.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 6,
     "uniques": 5
   },
   "github.com": {
     "referrer": "github.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-31",
-    "count": 11,
-    "uniques": 7
+    "last_seen": "2026-11-01",
+    "count": 16,
+    "uniques": 10
   },
   "app.raindrop.io": {
     "referrer": "app.raindrop.io",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 1,
     "uniques": 1
   },
   "hns.local": {
     "referrer": "hns.local",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 1,
     "uniques": 1
   },
   "vuink.com": {
     "referrer": "vuink.com",
     "first_seen": "2026-10-29",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 1,
     "uniques": 1
   },
   "reddit.com": {
     "referrer": "reddit.com",
     "first_seen": "2026-10-30",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 3,
     "uniques": 2
   },
   "search.brave.com": {
     "referrer": "search.brave.com",
     "first_seen": "2026-10-31",
-    "last_seen": "2026-10-31",
+    "last_seen": "2026-11-01",
     "count": 2,
     "uniques": 1
   }
