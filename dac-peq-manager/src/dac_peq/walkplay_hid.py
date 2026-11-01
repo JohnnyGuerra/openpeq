@@ -249,6 +249,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
         return "walkplay_dsp"
 
     def connect(self) -> None:
+        safety.check_identity(self.vendor_id or self.CRINEAR_VID, self.product_id or self.PROTOCOL_MICRO_PID)
         if self.use_mock:
             self._dev = MockWalkPlayDevice(
                 self.vendor_id or self.CRINEAR_VID,

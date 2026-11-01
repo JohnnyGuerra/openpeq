@@ -460,7 +460,7 @@ class KTMicroDSPDevice(BaseDSPDevice):
 
         # Safety guard before anything is opened: identity must be confirmed from the table.
         # Runs without the hid library so a blocked device is refused even when it is not present.
-        if not self.use_mock and vid is not None and pid is not None:
+        if vid is not None and pid is not None:
             safety.check_identity(vid, pid)
 
         if self.use_mock:

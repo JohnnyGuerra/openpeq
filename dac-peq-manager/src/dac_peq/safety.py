@@ -11,9 +11,6 @@ packet is built. A rejected write is aborted in full — no partial application.
 Identity is resolved by exact VID/PID match, then by product-name substring under the
 same vendor. A device that reports a known vendor with an unlisted product is refused.
 
-`use_mock=True` skips identity confirmation: a mock device is not hardware, so there is
-nothing to corrupt.
-
 Ranges are what the tool accepts, not a claim about the hardware's limits.
 """
 

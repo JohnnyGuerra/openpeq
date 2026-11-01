@@ -161,9 +161,8 @@ def get_dsp_device(
             pass
 
     if entry is None and use_mock:
-        # shortcut: a mock device is not hardware, so there is no identity to confirm
-        from dac_peq.ktmicro_hid import KTMicroDSPDevice
-        return KTMicroDSPDevice(vendor_id, product_id, path, True)
+        # Mock mode has no hardware to protect: resolve it to a table entry, never an invented one.
+        entry = table["devices"][0]
 
     if entry is None:
         raise safety.DeviceSecurityException(

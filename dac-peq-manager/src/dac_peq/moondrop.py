@@ -113,6 +113,7 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
         return "moondrop_dsp"
 
     def connect(self) -> None:
+        safety.check_identity(self.vendor_id or self.MOONDROP_VID, self.product_id or self.MOONDROP_PID)
         if self.use_mock:
             self._dev = MockMoondropDevice(self.vendor_id or self.MOONDROP_VID, self.product_id or self.MOONDROP_PID)
             return
