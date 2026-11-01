@@ -6,6 +6,12 @@
     "uniques": 35
   },
   {
+    "path": "/JohnnyGuerra/openpeq",
+    "title": "Overview",
+    "count": 8,
+    "uniques": 6
+  },
+  {
     "path": "/JohnnyGuerra/dac-peq-manager/blob/master/COMPATIBILITY.md",
     "title": "/blob/master/COMPATIBILITY.md",
     "count": 7,
@@ -50,12 +56,6 @@
   {
     "path": "/JohnnyGuerra/dac-peq-manager/blob/master/.gitignore",
     "title": "/blob/master/.gitignore",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "path": "/JohnnyGuerra/dac-peq-manager/blob/master/GEMINI.md",
-    "title": "/blob/master/GEMINI.md",
     "count": 1,
     "uniques": 1
   }
