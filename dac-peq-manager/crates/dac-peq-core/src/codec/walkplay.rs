@@ -1,3 +1,5 @@
+use crate::codec::safety;
+use crate::error::{DacError, Result};
 use crate::models::{BiquadBand, FilterType};
 
 pub const WALKPLAY_RPT_ID: u8 = 0x4B;
@@ -20,9 +22,9 @@ pub const END_BYTE: u8 = 0x00;
 
 /// Compute 20-byte Q2.30 biquad coefficient array for WalkPlay DSP at 96 kHz.
 /// Matches official WalkPlay hardware DSP encoder.
-pub fn compute_walkplay_biquad(freq: f64, gain: f64, q: f64) -> [u8; 20] {
+pub fn compute_walkplay_biquad(freq: f64, gain: f64, q: f64, band: usize) -> Result<[u8; 20]> {
     if gain.abs() < 1e-6 {
-        return [0u8; 20];
+        return Ok([0u8; 20]);
     }
 
     let a = 10f64.powf(gain / 40.0);
@@ -39,19 +41,20 @@ pub fn compute_walkplay_biquad(freq: f64, gain: f64, q: f64) -> [u8; 20] {
     let a2 = 1.0 - alpha / a;
 
     let scale = 1073741824.0; // 2^30
-    let i_b0 = (b0 / a0 * scale).round() as i32;
-    let i_b1 = (b1 / a0 * scale).round() as i32;
-    let i_b2 = (b2 / a0 * scale).round() as i32;
-    let i_neg_a1 = (-(a1 / a0) * scale).round() as i32;
-    let i_neg_a2 = (-(a2 / a0) * scale).round() as i32;
-
     let mut out = [0u8; 20];
-    out[0..4].copy_from_slice(&i_b0.to_le_bytes());
-    out[4..8].copy_from_slice(&i_b1.to_le_bytes());
-    out[8..12].copy_from_slice(&i_b2.to_le_bytes());
-    out[12..16].copy_from_slice(&i_neg_a1.to_le_bytes());
-    out[16..20].copy_from_slice(&i_neg_a2.to_le_bytes());
-    out
+    let coeffs = [b0 / a0 * scale, b1 / a0 * scale, b2 / a0 * scale, -(a1 / a0) * scale, -(a2 / a0) * scale];
+    for (idx, v) in coeffs.iter().enumerate() {
+        // No silent truncation: a value that does not fit int32 is refused, not wrapped.
+        let quantized = v.round();
+        if !(quantized >= -2147483648.0 && quantized <= 2147483647.0) {
+            return Err(DacError::InvalidFilter(format!(
+                "SAFETY GUARD: write rejected - band {}: coefficient {} out of int32 range ({})",
+                band, idx, quantized
+            )));
+        }
+        out[idx * 4..idx * 4 + 4].copy_from_slice(&(quantized as i32).to_le_bytes());
+    }
+    Ok(out)
 }
 
 /// Encode a single filter packet (37 bytes) for WalkPlay Scheme 11 / Scheme 16 devices.
@@ -63,7 +66,8 @@ pub fn encode_walkplay_filter_packet(
     q: f64,
     filter_type: FilterType,
     slot: u8,
-) -> [u8; WALKPLAY_RPT_WRITE_LEN] {
+) -> Result<[u8; WALKPLAY_RPT_WRITE_LEN]> {
+    safety::validate_band(safety::table()?, "walkplay_dsp", filter_idx as usize, freq, gain, q)?;
     let mut pkt = [0u8; WALKPLAY_RPT_WRITE_LEN];
     pkt[0] = OP_WRITE;
     pkt[1] = WALKPLAY_CMD_PEQ_VALUES;
@@ -73,12 +77,29 @@ pub fn encode_walkplay_filter_packet(
     pkt[5] = 0x00;
     pkt[6] = 0x00;
 
-    let biquad_bytes = compute_walkplay_biquad(freq, gain, q);
+    let biquad_bytes = compute_walkplay_biquad(freq, gain, q, filter_idx as usize)?;
     pkt[7..27].copy_from_slice(&biquad_bytes);
 
-    let freq_u16 = freq.round().clamp(10.0, 48000.0) as u16;
-    let q_u16 = (q * 256.0).round().clamp(1.0, 65535.0) as u16;
-    let gain_i16 = (gain * 256.0).round().clamp(-32768.0, 32767.0) as i16;
+    // Refuse, never clamp: the guard has already checked the accepted ranges, this is
+    // the backstop that stops a value that cannot be packed.
+    if !freq.is_finite() || freq <= 0.0 || freq > 65535.0 {
+        return Err(DacError::InvalidFilter(format!(
+            "SAFETY GUARD: write rejected - band {filter_idx}: freq {freq} Hz cannot be packed (uint16)."
+        )));
+    }
+    if !q.is_finite() || q <= 0.0 || q * 256.0 > 65535.0 {
+        return Err(DacError::InvalidFilter(format!(
+            "SAFETY GUARD: write rejected - band {filter_idx}: Q {q} cannot be packed (uint16 x256)."
+        )));
+    }
+    if !gain.is_finite() || gain * 256.0 < -32768.0 || gain * 256.0 > 32767.0 {
+        return Err(DacError::InvalidFilter(format!(
+            "SAFETY GUARD: write rejected - band {filter_idx}: gain {gain} dB cannot be packed (int16 x256)."
+        )));
+    }
+    let freq_u16 = freq.round() as u16;
+    let q_u16 = (q * 256.0).round() as u16;
+    let gain_i16 = (gain * 256.0).round() as i16;
 
     pkt[27..29].copy_from_slice(&freq_u16.to_le_bytes());
     pkt[29..31].copy_from_slice(&q_u16.to_le_bytes());
@@ -88,7 +109,7 @@ pub fn encode_walkplay_filter_packet(
     pkt[35] = slot;
     pkt[36] = END_BYTE;
 
-    pkt
+    Ok(pkt)
 }
 
 /// Decode a filter packet returned by WalkPlay DSP into a BiquadBand.
@@ -159,7 +180,7 @@ mod tests {
     fn test_walkplay_filter_packet_exact_match() {
         // Filter 2 from captured Protocol Micro log:
         // freq: 500, q: 1.50, gain: 8.0 dB, type: PK, slot: 101
-        let pkt = encode_walkplay_filter_packet(2, 500.0, 8.0, 1.5, FilterType::Peaking, 101);
+        let pkt = encode_walkplay_filter_packet(2, 500.0, 8.0, 1.5, FilterType::Peaking, 101).unwrap();
         let expected_prefix = [0x01, 0x09, 0x18, 0x00, 0x02, 0x00, 0x00];
         assert_eq!(&pkt[0..7], &expected_prefix);
 
@@ -185,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_walkplay_decode_filter_packet() {
-        let pkt = encode_walkplay_filter_packet(1, 200.0, 4.0, 0.20, FilterType::Peaking, 101);
+        let pkt = encode_walkplay_filter_packet(1, 200.0, 4.0, 0.20, FilterType::Peaking, 101).unwrap();
         let decoded = decode_walkplay_filter_packet(&pkt).expect("Should decode");
         assert_eq!(decoded.index, Some(1));
         assert_eq!(decoded.freq, 200.0);

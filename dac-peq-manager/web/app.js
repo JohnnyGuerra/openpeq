@@ -715,6 +715,18 @@ export function onDragTouchEnd() {
   window.removeEventListener("touchend", onDragTouchEnd);
 }
 
+// ── Flash Wear Levels (shared by the badge and the NVRAM confirm dialog) ──────
+const WEAR_HIGH_TOTAL = 50;
+const WEAR_HIGH_24H = 10;
+const WEAR_MODERATE_24H = 5;
+
+function wearLevel(stats) {
+  const writes24h = stats.timestamps.filter((t) => t > Date.now() - 24 * 3600 * 1000).length;
+  if (stats.total >= WEAR_HIGH_TOTAL || writes24h >= WEAR_HIGH_24H) return { level: "high", writes24h };
+  if (writes24h >= WEAR_MODERATE_24H) return { level: "moderate", writes24h };
+  return { level: "low", writes24h };
+}
+
 // ── Flash Counter UI Badge ────────────────────────────────────────────────────
 function updateFlashCounterBadge(dev) {
   const badge = document.getElementById("nvramWearBadge") || document.getElementById("flashCounterBadge");
@@ -727,18 +739,18 @@ function updateFlashCounterBadge(dev) {
   }
 
   const stats = getFlashStats(dev);
-  const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-  const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+  const wear = wearLevel(stats);
+  const writes24h = wear.writes24h;
 
   lbl.textContent = stats.total;
   badge.style.display = "inline-flex";
 
   const wearDisclaimer = "Local browser estimated write counter; not read from hardware telemetry";
-  if (stats.total >= 50 || writes24h >= 10) {
+  if (wear.level === "high") {
     lbl.style.color = "var(--accent-red)";
     badge.style.borderColor = "var(--accent-red)";
     badge.title = `⚠️ HIGH NVRAM FLASH WEAR! ${writes24h} writes in last 24h, ${stats.total} total writes. EEPROM wear limit approaching. (${wearDisclaimer})`;
-  } else if (writes24h >= 5) {
+  } else if (wear.level === "moderate") {
     lbl.style.color = "var(--accent-yellow)";
     badge.style.borderColor = "var(--accent-yellow)";
     badge.title = `Moderate flash wear: ${writes24h} writes in last 24h, ${stats.total} total writes. (${wearDisclaimer})`;
@@ -964,15 +976,15 @@ async function applyToDevice(commitFlash = false) {
 
   if (commitFlash && !isDemoMode) {
     const stats = getFlashStats(connectedHidDevice);
-    const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-    const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+    const wear = wearLevel(stats);
 
     let wearWarning = "";
-    if (writes24h >= 10 || stats.total >= 50) {
+    if (wear.level === "high") {
       wearWarning =
         `⚠️ FLASH SILICON WEAR WARNING!\n` +
-        `This DAC has received ${writes24h} NVRAM writes in the last 24 hours (${stats.total} total writes).\n` +
-        `Budget EEPROMs degrade after repeated writing. Writing too frequently can permanently wear out the DSP memory.\n\n`;
+        `This DAC has received ${wear.writes24h} NVRAM writes in the last 24 hours (${stats.total} total writes).\n` +
+        `Budget EEPROMs degrade after repeated writing. Writing too frequently can permanently wear out the DSP memory.\n` +
+        `Nothing on the device enforces its endurance limit — this warning is informational.\n\n`;
     }
 
     const ok = confirm(
@@ -989,7 +1001,8 @@ async function applyToDevice(commitFlash = false) {
 
   const compensate2X = document.getElementById("chkCompensate2X")?.checked || false;
   const selSlot = document.getElementById("selHardwareSlot");
-  const slotId = selSlot ? parseInt(selSlot.value, 10) || 3 : 3;
+  const parsedSlot = parseInt(selSlot?.value, 10);
+  const slotId = Number.isNaN(parsedSlot) ? 3 : parsedSlot;
 
   // Automatic First-Commit Stock Safety Snapshot
   if (commitFlash && connectedHidDevice && !isDemoMode) {
@@ -1116,7 +1129,8 @@ async function applyToDevice(commitFlash = false) {
     const isFiio = Boolean(entry) && entry.architecture === "fiio_dsp";
     const selDac = document.getElementById("selDacFilter");
     if (selDac && isFiio) {
-      const filterVal = parseInt(selDac.value, 10) || 1;
+      const parsedFilter = parseInt(selDac.value, 10);
+      const filterVal = Number.isNaN(parsedFilter) ? 1 : parsedFilter;
       await sendKtMicroFilter(connectedHidDevice, filterVal);
     }
 

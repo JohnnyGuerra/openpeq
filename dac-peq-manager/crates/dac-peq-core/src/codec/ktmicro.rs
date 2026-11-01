@@ -1,4 +1,4 @@
-use crate::codec::safety::assert_safe_for_hardware_flash;
+use crate::codec::safety;
 use crate::error::{DacError, Result};
 use crate::models::{BiquadBand, PeqPreset};
 
@@ -89,6 +89,7 @@ pub fn encode_biquad_band(
         )));
     }
 
+    safety::validate_band(safety::table()?, "ktmicro_dsp", band_index - 1, band.freq, band.gain, band.q)?;
     let reg_a = REG_BAND_BASE + ((band_index - 1) * 2) as u8;
     let reg_b = reg_a + 1;
 
@@ -122,8 +123,9 @@ pub fn encode_biquad_band(
 }
 
 /// Encode complete flash payload sequence for KTMicro KT02H20.
-/// Guardrail: If device is Kiwi Ears Allegro Mini (0x31B2:0x0111), registers 0x11 and 0x66
-/// are strictly omitted to prevent iOS/YouTube Music volume control lockouts!
+/// Defence in depth (host-side only — the device accepts writes to these registers): for Kiwi Ears
+/// Allegro Mini (0x31B2:0x0111), registers 0x11 and 0x66 are strictly omitted to prevent iOS/YouTube
+/// Music volume control lockouts.
 pub fn encode_preset_payload(
     preset: &PeqPreset,
     vid: u16,
@@ -132,7 +134,7 @@ pub fn encode_preset_payload(
     compensate_2x: bool,
     commit_nvram: bool,
 ) -> Result<Vec<KtReport>> {
-    assert_safe_for_hardware_flash(vid, pid, None)?;
+    safety::assert_safe_for_hardware_flash(vid, pid, None)?;
 
     let is_allegro_mini = vid == 0x31B2;
     let mut reports = Vec::new();

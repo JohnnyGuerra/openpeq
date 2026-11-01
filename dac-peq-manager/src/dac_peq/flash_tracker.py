@@ -38,6 +38,7 @@ class FlashWearTracker:
     def __init__(self, cache_file: Optional[Path] = None):
         self.cache_file = cache_file or get_default_cache_file()
         self._data: Dict[str, Any] = {"version": 1, "devices": {}}
+        self.load_error: Optional[str] = None
         self._load()
 
     def _load(self) -> None:
@@ -49,9 +50,14 @@ class FlashWearTracker:
                 loaded = json.load(f)
                 if isinstance(loaded, dict) and "devices" in loaded:
                     self._data = loaded
-        except Exception:
-            # Fall back to empty in-memory state on corrupted cache
+        except Exception as exc:
+            # Corrupted cache: fall back to an empty count, but record it — silently resetting
+            # would hide commits that already burned flash cycles.
             self._data = {"version": 1, "devices": {}}
+            self.load_error = (
+                f"flash history at {self.cache_file} is unreadable ({exc}); the wear count "
+                "restarts from zero and earlier commits are not recoverable"
+            )
 
     def _save(self) -> None:
         """Persist history to disk gracefully."""
@@ -165,7 +171,8 @@ class FlashWearTracker:
             msg = (
                 f"You have committed to hardware flash {last_24h} times in the last 24 hours "
                 f"({total} cumulative burns). High flash frequency exhausts EEPROM endurance "
-                "and can permanently corrupt onboard DSP memory."
+                "and can permanently corrupt onboard DSP memory. This warning is informational — nothing "
+                "here enforces endurance, and the hardware does not."
             )
             return True, msg
 

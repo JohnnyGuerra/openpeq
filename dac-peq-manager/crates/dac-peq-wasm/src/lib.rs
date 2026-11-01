@@ -168,7 +168,7 @@ pub fn encode_walkplay_payload(
             band.q,
             band.filter_type,
             slot_id,
-        );
+        ).map_err(|e| JsValue::from_str(&e.to_string()))?;
         arr.push(&js_sys::Uint8Array::from(&pkt[..]));
     }
 
@@ -195,7 +195,7 @@ pub fn encode_moondrop_payload(
         &preset.bands,
         preset.preamp,
         commit_flash,
-    );
+    ).map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(js_sys::Uint8Array::from(&payload[..]))
 }
 
@@ -209,6 +209,13 @@ pub fn encode_factory_reset_report() -> js_sys::Uint8Array {
 pub fn encode_nvram_commit_report() -> js_sys::Uint8Array {
     let rpt = encode_nvram_commit();
     js_sys::Uint8Array::from(rpt.as_bytes())
+}
+
+#[wasm_bindgen]
+pub fn set_device_table(json: &str) -> std::result::Result<String, JsValue> {
+    dac_peq_core::codec::safety::set_device_table(json)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(String::new())
 }
 
 #[wasm_bindgen]

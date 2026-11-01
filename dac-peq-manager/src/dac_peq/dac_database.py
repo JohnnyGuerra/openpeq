@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dac_peq import safety
+
 
 @dataclass
 class DACInfo:
@@ -72,9 +74,15 @@ def get_architecture_eq_capabilities(
     pid: Optional[int] = None,
     quirks: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Return modernGraphTool / devicePEQ style declarative EQ capabilities for a DSP architecture."""
+    """Return modernGraphTool / devicePEQ style declarative EQ capabilities for a DSP architecture.
+
+    Ranges come from the device table (data/dacs.json) — the single source of truth.
+    """
     arch = (architecture or "").lower()
     quirk_list = quirks or []
+    r = safety.ranges_for(arch)
+    ranges = [r["q_min"], r["q_max"]]
+    gain_range = [r["gain_min_db"], r["gain_max_db"]]
 
     if arch == "ktmicro_dsp":
         # Strict GEMINI.md Rule 1: Kiwi Ears Allegro Mini (0x31B2:0x0111) blocks 0x11 and 0x66 (noPregain)
@@ -83,9 +91,9 @@ def get_architecture_eq_capabilities(
         blocked_regs = [] if is_ja11 else ["0x11", "0x66"]
         return {
             "max_bands": hardware_bands or 5,
-            "gain_range_db": [-12.0, 12.0],
+            "gain_range_db": gain_range,
             "gain_step_db": 0.1,
-            "q_range": [0.1, 10.0],
+            "q_range": ranges,
             "q_step": 0.05,
             "supported_filter_types": ["PK", "LSQ", "HSQ"],
             "supports_hardware_preamp": supports_preamp,
@@ -96,9 +104,9 @@ def get_architecture_eq_capabilities(
     if arch == "walkplay_dsp":
         return {
             "max_bands": hardware_bands or 8,
-            "gain_range_db": [-12.0, 12.0],
+            "gain_range_db": gain_range,
             "gain_step_db": 0.1,
-            "q_range": [0.1, 10.0],
+            "q_range": ranges,
             "q_step": 0.05,
             "supported_filter_types": ["PK", "LSQ", "HSQ"],
             "supports_hardware_preamp": True,
@@ -109,9 +117,9 @@ def get_architecture_eq_capabilities(
     if arch == "moondrop_dsp":
         return {
             "max_bands": hardware_bands or 9,
-            "gain_range_db": [-12.0, 12.0],
+            "gain_range_db": gain_range,
             "gain_step_db": 0.1,
-            "q_range": [0.1, 10.0],
+            "q_range": ranges,
             "q_step": 0.05,
             "supported_filter_types": ["PK", "LSQ", "HSQ"],
             "supports_hardware_preamp": True,
@@ -122,9 +130,9 @@ def get_architecture_eq_capabilities(
     # Host DSP (PipeWire / EqualizerAPO / Wavelet / Fixed Mask ROM)
     return {
         "max_bands": hardware_bands or 10,
-        "gain_range_db": [-18.0, 18.0],
+        "gain_range_db": gain_range,
         "gain_step_db": 0.1,
-        "q_range": [0.1, 10.0],
+        "q_range": ranges,
         "q_step": 0.01,
         "supported_filter_types": ["PK", "LSQ", "HSQ"],
         "supports_hardware_preamp": True,
@@ -149,7 +157,8 @@ class DACDatabase:
             return
         with open(self.data_file, "r", encoding="utf-8") as f:
             raw = json.load(f)
-            self._dacs = [DACInfo(**item) for item in raw]
+            devices = raw["devices"] if isinstance(raw, dict) else raw
+            self._dacs = [DACInfo(**item) for item in devices]
 
     def all(self) -> List[DACInfo]:
         """Return all catalogued DAC devices."""

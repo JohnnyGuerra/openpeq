@@ -151,13 +151,12 @@ fn test_ktmicro_zero_db_preamp_writes_register_0x66() {
         "Register 0x66 must be omitted on Allegro Mini even with 0.0 dB preamp!"
     );
 
-    // Any device under VID 0x31B2 (e.g. OEM PID 0x9999) must also omit 0x66
-    let oem_allegro_reports = encode_preset_payload(&preset, 0x31B2, 0x9999, 3, true, true)
-        .expect("Payload generation failed");
-    assert!(
-        !oem_allegro_reports.iter().any(|r| r.as_bytes()[1] == REG_PREAMP),
-        "Register 0x66 must be omitted across all 0x31B2 devices!"
-    );
+    // An unlisted PID under VID 0x31B2 is no longer assumed to be KTMicro: the guard
+    // refuses it outright, which is what protects the user from writing to a device
+    // whose architecture the tool cannot confirm.
+    let err = encode_preset_payload(&preset, 0x31B2, 0x9999, 3, true, true)
+        .expect_err("Unknown device must be refused");
+    assert!(format!("{err}").contains("SAFETY GUARD"), "expected a guard refusal, got: {err}");
 }
 
 #[test]
@@ -258,7 +257,7 @@ fn test_moondrop_encode_report_9_bands() {
     for i in 1..=5 {
         bands.push(BiquadBand::new(FilterType::Peaking, 200.0 * i as f64, 1.5, 1.0));
     }
-    let rpt = encode_moondrop_report(&bands, -3.0, true);
+    let rpt = encode_moondrop_report(&bands, -3.0, true).unwrap();
     assert_eq!(rpt[0], 0x21); // commit flash
     assert_eq!(rpt[1], 0x09); // 9 bands
     assert_eq!(rpt[2] as i8, -6); // -3.0 * 2 = -6

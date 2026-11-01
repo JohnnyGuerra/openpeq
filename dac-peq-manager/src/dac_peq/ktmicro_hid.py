@@ -11,9 +11,12 @@ Implements the 11-byte register protocol:
   - Enable/Slot: [0x4B, 0x24, 0x00, 0x00, 0x00, 0x57, 0x00, slot_id, 0x00, 0x00, 0x00]
   - Commit/Save: [0x4B, 0x00, 0x00, 0x00, 0x00, 0x53, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-Safety Guard:
-  - Explicitly blocks writes to Conexant CX31993 (VID 0x0572) to prevent
-    corrupting OTP descriptor registers.
+Safety Guard (defence in depth):
+  - The device table (data/dacs.json) is the single source of truth for what this tool may
+    write. It refuses a device whose identity it cannot confirm and a coefficient outside the
+    accepted range before any packet is built.
+  - It is a guard on this tool only: the hardware offers no protection of its own. A write to a
+    fixed-mask-ROM device is accepted by the device and corrupts its OTP descriptor registers.
 
 --------------------------------------------------------------------------------
 ACKNOWLEDGMENTS & UPSTREAM ATTRIBUTION:
@@ -59,7 +62,8 @@ KTMICRO_KNOWN_VIDS = [
     0x262A,  # WalkPlay OEM
 ]
 
-# Blocked hardware: Conexant CX31993 (Fixed Mask ROM - DO NOT FLASH)
+# Blocked hardware: Conexant CX31993 (Fixed Mask ROM - DO NOT FLASH). The device answers writes;
+# nothing on the device refuses them, so the refusal has to happen here.
 CONEXANT_VID = 0x0572
 CONEXANT_PID = 0x1B08
 KNOWN_CONEXANT_DEVICES = [
@@ -738,7 +742,11 @@ class KTMicroDSPDevice(BaseDSPDevice):
     def read_current_peq(self, compensate_2x: Optional[bool] = None) -> Dict[str, Any]:
         """Read 5 bands, global preamp, and active slot from the hardware registers.
 
-        If compensate_2x is None, auto-detected from firmware quirks/heuristics.
+        Read-back detection only: this reports what the registers answer, it cannot confirm that an
+        earlier write landed. A fixed-mask-ROM device answers with its ROM contents, not with the
+        values that were written.
+
+        If compensate_2x is None, auto-detected from the device table quirks/heuristics.
         """
         if compensate_2x is None:
             compensate_2x = bool(self.firmware_quirks.get("requires_compensate_2x", False)) if self.firmware_quirks else False
