@@ -6,6 +6,7 @@ Executes Web modules in Node.js to verify browser-side security invariants and m
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,8 @@ import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
+
+pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is needed to execute the web modules")
 
 
 def run_node_eval(js_code: str) -> dict:
