@@ -5,6 +5,7 @@ on:
     branches: [ main, master ]
     paths:
       - 'dac-peq-manager/web/**'
+      - 'dac-peq-manager/src/dac_peq/data/dacs.json'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -26,6 +27,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Materialise the device table
+        # web/dacs.json is a symlink to the shared table; Pages serves regular files only.
+        run: cp -L dac-peq-manager/src/dac_peq/data/dacs.json dac-peq-manager/web/dacs.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

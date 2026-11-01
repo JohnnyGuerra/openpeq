@@ -356,8 +356,12 @@ def test_ktmicro_preamp_null_and_extreme_clamping():
 
 
 def test_ktmicro_arbitrary_31b2_pid_guarded():
-    """Verify any 0x31B2 device (e.g. 0x31B2:0x9999) omits register 0x66 to prevent volume lockout."""
-    dev_oem = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x9999, use_mock=True)
+    """An unlisted 0x31B2 product is refused; a listed one omits register 0x66 (noPregain quirk)."""
+    guarded = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x9999, use_mock=True)
+    with pytest.raises(DeviceSecurityException):
+        guarded.connect()
+
+    dev_oem = KTMicroDSPDevice(vendor_id=0x31B2, product_id=0x3016, use_mock=True)
     dummy_bands = [{"index": i, "type": "PK", "freq": 1000.0, "gain": 0.0, "q": 1.0} for i in range(1, 6)]
     with dev_oem:
         dev_oem._dev.ram_registers.clear()

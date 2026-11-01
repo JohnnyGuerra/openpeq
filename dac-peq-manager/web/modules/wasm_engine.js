@@ -4,6 +4,7 @@
  */
 
 import { computeCompositeCurve, generateLogFrequencies } from "./biquad_math.js";
+import { loadTable } from "./safety_guard.js";
 import { formatPipeWireConf, formatEqualizerApo } from "./exporters.js";
 
 let wasmModule = null;
@@ -19,6 +20,8 @@ export async function initWasmEngine() {
     await init();
     wasmModule = wasmImport;
     wasmReady = true;
+    // Rust cannot read a file in the browser, so hand it the same table the JS guard uses.
+    wasmImport.set_device_table(JSON.stringify(await loadTable("dacs.json")));
     const version = typeof wasmImport.wasm_version === "function" ? wasmImport.wasm_version() : "0.2.0";
     console.log(`%c[WASM Engine] Rust Core v${version} active`, "color: #10b981; font-weight: bold;");
     return true;
