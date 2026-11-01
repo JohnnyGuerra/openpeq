@@ -11,21 +11,7 @@ use std::time::Duration;
 use dac_peq_core::models::PeqPreset;
 use dac_peq_core::*;
 
-const KNOWN_HARDWARE: &[(u16, u16, &str)] = &[
-    (0x31B2, 0x0111, "Kiwi Ears Allegro Mini / KT02H20"),
-    (0x2972, 0x0102, "FiiO JA11"),
-    (0x2972, 0x0034, "FiiO KA11 (Legacy)"),
-    (0x1908, 0x2070, "JCALLY JM20 / JM6 Pro"),
-    (0x3302, 0x022A, "Moondrop Click"),
-    (0x3302, 0x43CC, "CrinEar Protocol Max (WalkPlay 10-Band)"),
-    (0x3302, 0x4307, "Tanchjim SPACE Pro (WalkPlay 10-Band)"),
-    (0x3302, 0x431D, "Tanchjim SPACE Pro Rev B (WalkPlay 10-Band)"),
-    (0x3302, 0x4362, "WalkPlay Scheme 11 (8-Band)"),
-    (0x3302, 0x4353, "WalkPlay Scheme 16 (8-Band)"),
-    (0x3302, 0xC20F, "WalkPlay Generic (8-Band)"),
-    (0x0BDA, 0x0023, "WalkPlay Realtek ALC5686 OEM (8-Band)"),
-    (0x31B2, 0x0112, "Moondrop FreeDSP / May"),
-];
+
 
 static EMBEDDED_PRESETS: &[(&str, &str)] = &[
     ("bmasterx6", include_str!("../../../presets/bmasterx6.json")),
@@ -291,7 +277,7 @@ fn find_supported_device(
         }
 
         // Safety check: Conexant CX31993 must never be targeted for hardware flashing
-        if is_conexant_cx31993(vid, pid, Some(&prod)) || vid == 0x0572 || (vid == 0x3302 && pid == 0x3365) {
+        if is_conexant_cx31993(vid, pid, Some(&prod)) {
             if vid_filter.is_some() || pid_filter.is_some() {
                 anyhow::bail!(
                     "Target device [{:04X}:{:04X}] {} is Conexant CX31993 (Fixed Mask ROM). Hardware flashing is permanently blocked to prevent bricking!",
@@ -462,49 +448,32 @@ fn main() -> Result<()> {
                 }
             };
 
+            let table = safety::table()?;
             let mut found = 0;
             for dev in api.device_list() {
                 let vid = dev.vendor_id();
                 let pid = dev.product_id();
                 let prod = dev.product_string().unwrap_or("Unknown Audio Device");
-                let is_cx = is_conexant_cx31993(vid, pid, Some(prod))
-                    || vid == 0x0572
-                    || (vid == 0x3302 && pid == 0x3365);
-
-                let is_moondrop_freedsp = vid == 0x31B2 && pid == 0x0112;
-                let is_known = KNOWN_HARDWARE.iter().any(|(k_vid, k_pid, _)| *k_vid == vid && *k_pid == pid);
-                let is_ktmicro = (vid == 0x31B2 && pid != 0x0112)
-                    || (vid == 0x2972 && (pid == 0x0102 || pid == 0x0034))
-                    || (vid == 0x1908 && pid == 0x2070)
-                    || (vid == 0x3302 && pid == 0x022A);
-                let is_walkplay = (vid == 0x3302 && pid != 0x022A && pid != 0x3365)
-                    || (vid == 0x0BDA && pid == 0x0023);
-
-                if is_cx || is_known || is_ktmicro || is_walkplay || is_moondrop_freedsp {
-                    found += 1;
-                    let known_name = KNOWN_HARDWARE
-                        .iter()
-                        .find(|(k_vid, k_pid, _)| *k_vid == vid && *k_pid == pid)
-                        .map(|(_, _, name)| *name)
-                        .unwrap_or(prod);
-
-                    let badge = if is_cx {
-                        "[HOST-DSP ONLY - Fixed Mask ROM]".bold().yellow()
-                    } else if is_moondrop_freedsp {
-                        "[HARDWARE FLASHABLE (Moondrop 9-Band DSP)]".bold().green()
-                    } else if is_ktmicro {
-                        "[HARDWARE FLASHABLE (KTMicro KT02H20)]".bold().green()
-                    } else if is_walkplay {
-                        "[HARDWARE FLASHABLE (WalkPlay DSP)]".bold().green()
-                    } else {
-                        "[SUPPORTED AUDIO DEVICE]".bold().green()
-                    };
-
-                    println!(
-                        "  • [{:04X}:{:04X}] {} (rev: 0x{:04X}) — {}",
-                        vid, pid, known_name.bold(), dev.release_number(), badge
-                    );
+                // Identity comes from the shared table, never from the VID alone: an
+                // unknown PID under a known VID is not assumed to be the same chipset.
+                let entry = safety::match_device(table, vid, pid, Some(prod));
+                if entry.is_none() && !table.devices.iter().any(|d| d.vid == vid) {
+                    continue;
                 }
+                let badge = match entry {
+                    None => "[UNSUPPORTED - not in the device table, writes refused]".red(),
+                    Some(d) if safety::BLOCKED_ARCHITECTURES.contains(&d.architecture.as_str()) =>
+                        "[HOST-DSP ONLY - Fixed Mask ROM]".yellow(),
+                    Some(d) => format!("[HARDWARE FLASHABLE ({})]", d.chipset).green(),
+                };
+                if entry.is_some() {
+                    found += 1;
+                }
+                let name = entry.map(|d| d.name.as_str()).unwrap_or(prod);
+                println!(
+                    "  • [{:04X}:{:04X}] {} (rev: 0x{:04X}) — {}",
+                    vid, pid, name.bold(), dev.release_number(), badge
+                );
             }
 
             if found == 0 {
@@ -544,7 +513,7 @@ fn main() -> Result<()> {
                         p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
                     }
                     println!("{}", format!("[APPLY] Loading preset '{}' into Moondrop FreeDSP live RAM...", p.name).bold().cyan());
-                    let report = encode_moondrop_report(&p.bands, p.preamp, false);
+                    let report = encode_moondrop_report(&p.bands, p.preamp, false)?;
                     println!("  Generated 64-byte Moondrop report: {:02X?}", &report[..]);
                     println!("{} Simulated live DSP write (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
                     return Ok(());
@@ -573,7 +542,7 @@ fn main() -> Result<()> {
                             b.q,
                             b.filter_type,
                             101,
-                        );
+                        )?;
                         println!("    Band #{}: {:02X?}", i + 1, pkt);
                     }
                     let gain_pkt = encode_walkplay_global_gain(p.preamp);
@@ -632,7 +601,7 @@ fn main() -> Result<()> {
                         format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
                     })?;
 
-                    let report = encode_moondrop_report(&p.bands, p.preamp, false);
+                    let report = encode_moondrop_report(&p.bands, p.preamp, false)?;
                     write_hid_report(&device, &report)?;
 
                     println!("{} Moondrop FreeDSP PEQ active in live DSP RAM.", "[OK]".bold().green());
@@ -666,7 +635,7 @@ fn main() -> Result<()> {
                             b.q,
                             b.filter_type,
                             101,
-                        );
+                        )?;
                         write_walkplay_report(&device, &pkt)?;
                     }
                     let gain_pkt = encode_walkplay_global_gain(p.preamp);
@@ -729,7 +698,7 @@ fn main() -> Result<()> {
                         p.bands = decimate_bands(&p.bands, 9, true, 48000.0);
                     }
                     println!("{}", format!("[FLASH] Saving preset '{}' to persistent Moondrop FreeDSP NVRAM...", p.name).bold().cyan());
-                    let report = encode_moondrop_report(&p.bands, p.preamp, true);
+                    let report = encode_moondrop_report(&p.bands, p.preamp, true)?;
                     println!("  Generated 64-byte Moondrop flash report (0x21 COMMIT): {:02X?}", &report[..]);
                     println!("{} Verified safety guard & simulated hardware commit (Dry-run mode active).", "[DRY-RUN OK]".bold().green());
                     return Ok(());
@@ -758,7 +727,7 @@ fn main() -> Result<()> {
                             b.q,
                             b.filter_type,
                             101,
-                        );
+                        )?;
                         println!("    Band #{}: {:02X?}", i + 1, pkt);
                     }
                     let gain_pkt = encode_walkplay_global_gain(p.preamp);
@@ -832,7 +801,7 @@ fn main() -> Result<()> {
                         format!("Failed to open USB device [{:04X}:{:04X}]. Ensure udev rules are installed.", dev_info.vid, dev_info.pid)
                     })?;
 
-                    let report = encode_moondrop_report(&p.bands, p.preamp, true);
+                    let report = encode_moondrop_report(&p.bands, p.preamp, true)?;
                     write_hid_report(&device, &report)?;
 
                     thread::sleep(Duration::from_millis(500));
@@ -868,7 +837,7 @@ fn main() -> Result<()> {
                             b.q,
                             b.filter_type,
                             101,
-                        );
+                        )?;
                         write_walkplay_report(&device, &pkt)?;
                     }
                     let gain_pkt = encode_walkplay_global_gain(p.preamp);
