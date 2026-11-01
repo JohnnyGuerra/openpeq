@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from dac_peq.biquad import (
     calculate_recommended_preamp,
@@ -35,25 +35,27 @@ from dac_peq.biquad import (
 DEFAULT_CX31993_SINK = "alsa_output.usb-Conexant_CX31993*"
 
 
+def _preset_fields(preset: Dict[str, Any], auto_preamp: bool) -> Tuple[str, str, List[Dict[str, Any]], float]:
+    """Name, slug, bands and preamp — the same values every exporter needs."""
+    name = preset.get("name", "custom")
+    bands = preset.get("bands", [])
+    preamp = float(preset.get("preamp", 0.0))
+    if auto_preamp:
+        preamp = min(preamp, calculate_recommended_preamp(bands))
+    return name, name.replace(" ", "_").replace("-", "_").lower(), bands, preamp
+
+
 def format_pipewire_filter_chain(
     preset: Dict[str, Any],
     sink_target: str = DEFAULT_CX31993_SINK,
     auto_preamp: bool = False,
 ) -> str:
     """Generate PipeWire filter-chain configuration content."""
-    preset_name = preset.get("name", "custom")
-    preset_slug = preset_name.replace(" ", "_").replace("-", "_").lower()
-    description = preset.get("description", f"JM6 Pro EQ Preset {preset_name}")
-    bands = preset.get("bands", [])
+    preset_name, preset_slug, bands, preamp_db = _preset_fields(preset, auto_preamp)
     if len(bands) < 1:
         raise ValueError("Preset must contain at least 1 band.")
+    description = preset.get("description", f"JM6 Pro EQ Preset {preset_name}")
     num_bands = len(bands)
-
-    if auto_preamp:
-        rec = calculate_recommended_preamp(bands)
-        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
-    else:
-        preamp_db = float(preset.get("preamp", 0.0))
     linear_gain = round(10.0 ** (preamp_db / 20.0), 4)
 
     # Map filter types to PipeWire builtin labels
@@ -186,8 +188,7 @@ def export_pipewire_conf(
     auto_preamp: bool = False,
 ) -> Path:
     """Write PipeWire filter-chain configuration file."""
-    preset_name = preset.get("name", "custom")
-    preset_slug = preset_name.replace(" ", "_").replace("-", "_").lower()
+    _, preset_slug, _, _ = _preset_fields(preset, auto_preamp)
 
     if output_path is None:
         pw_dir = Path.home() / ".config" / "pipewire" / "pipewire.conf.d"
@@ -204,15 +205,8 @@ def export_pipewire_conf(
 
 def format_equalizer_apo(preset: Dict[str, Any], auto_preamp: bool = False) -> str:
     """Generate standard EqualizerAPO .txt configuration."""
-    preset_name = preset.get("name", "custom")
+    preset_name, _, bands, preamp_db = _preset_fields(preset, auto_preamp)
     description = preset.get("description", "")
-    bands = preset.get("bands", [])
-
-    if auto_preamp:
-        rec = calculate_recommended_preamp(bands)
-        preamp_db = min(float(preset.get("preamp", 0.0)), rec)
-    else:
-        preamp_db = float(preset.get("preamp", 0.0))
 
     lines = [
         "# EqualizerAPO Configuration",

@@ -1,6 +1,9 @@
 # USB DAC & IEM Hardware Compatibility Matrix
 
-This document tracks the hardware support, protocol reverse-engineering status, and physical verification for all known portable USB-C DAC dongles, DSP upgrade cables, and Bluetooth/USB hybrid DACs in `dac-peq-manager`.
+This document tracks hardware support, protocol reverse-engineering status, and physical verification for all known portable USB-C DAC dongles, DSP upgrade cables, and Bluetooth/USB hybrid DACs in **OpenPEQ**.
+
+> [!NOTE]
+> For deep technical chip architectures, electrical ratings, register mappings, and datasheet summaries, see the comprehensive [Hardware Chipset Datasheets & Architectural Specifications](docs/CHIPSETS.md).
 
 ---
 

@@ -16,6 +16,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
+from dac_peq import safety
+
 try:
     import hid
 except ImportError:
@@ -111,6 +113,7 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
         return "moondrop_dsp"
 
     def connect(self) -> None:
+        safety.check_identity(self.vendor_id or self.MOONDROP_VID, self.product_id or self.MOONDROP_PID)
         if self.use_mock:
             self._dev = MockMoondropDevice(self.vendor_id or self.MOONDROP_VID, self.product_id or self.MOONDROP_PID)
             return
@@ -144,6 +147,11 @@ class MoondropFreeDSPDevice(BaseDSPDevice):
         if len(bands) > self.max_bands:
             from dac_peq.biquad import decimate_bands
             bands = decimate_bands(bands, target_bands=self.max_bands)
+
+        # Validate every band against the table before anything is packed: a rejected
+        # write is aborted in full, never partially applied.
+        for i, b in enumerate(bands):
+            safety.validate_band(self.architecture_name, i, float(b.get("freq", 1000.0)), float(b.get("gain", 0.0)), float(b.get("q", 1.0)))
 
         preamp = float(preset.get("preamp", 0.0))
 

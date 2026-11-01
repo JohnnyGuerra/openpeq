@@ -11,9 +11,12 @@ Implements the 11-byte register protocol:
   - Enable/Slot: [0x4B, 0x24, 0x00, 0x00, 0x00, 0x57, 0x00, slot_id, 0x00, 0x00, 0x00]
   - Commit/Save: [0x4B, 0x00, 0x00, 0x00, 0x00, 0x53, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-Safety Guard:
-  - Explicitly blocks writes to Conexant CX31993 (VID 0x0572) to prevent
-    corrupting OTP descriptor registers.
+Safety Guard (defence in depth):
+  - The device table (data/dacs.json) is the single source of truth for what this tool may
+    write. It refuses a device whose identity it cannot confirm and a coefficient outside the
+    accepted range before any packet is built.
+  - It is a guard on this tool only: the hardware offers no protection of its own. A write to a
+    fixed-mask-ROM device is accepted by the device and corrupts its OTP descriptor registers.
 
 --------------------------------------------------------------------------------
 ACKNOWLEDGMENTS & UPSTREAM ATTRIBUTION:
@@ -40,6 +43,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
+from dac_peq import safety
 from dac_peq.transport import BaseDSPDevice
 
 try:
@@ -58,7 +62,8 @@ KTMICRO_KNOWN_VIDS = [
     0x262A,  # WalkPlay OEM
 ]
 
-# Blocked hardware: Conexant CX31993 (Fixed Mask ROM - DO NOT FLASH)
+# Blocked hardware: Conexant CX31993 (Fixed Mask ROM - DO NOT FLASH). The device answers writes;
+# nothing on the device refuses them, so the refusal has to happen here.
 CONEXANT_VID = 0x0572
 CONEXANT_PID = 0x1B08
 KNOWN_CONEXANT_DEVICES = [
@@ -71,10 +76,7 @@ NON_FLASHABLE_FIIO_PIDS = {0x0047, 0x0066, 0x0104, 0x0105, 0x0107}
 MOONDROP_FREEDSP_PID = 0x0112
 
 
-class DeviceSecurityException(RuntimeError):
-    """Raised when an unsafe operation is attempted against protected or fixed-ROM hardware."""
-    pass
-
+DeviceSecurityException = safety.DeviceSecurityException
 
 class DeviceCommunicationError(Exception):
     """Raised when HID communication fails or device times out."""
@@ -149,19 +151,15 @@ def detect_firmware_quirks(
 
 
 def is_conexant_cx31993(dev_info: Dict[str, Any]) -> bool:
-    """Check if device descriptor matches Conexant CX31993."""
+    """Check if a device is a Conexant CX31993 fixed-mask-ROM part (table match or USB descriptor string)."""
     vid = dev_info.get("vendor_id", 0)
     pid = dev_info.get("product_id", 0)
+    entry = safety.match_device(safety.load_table(), vid, pid, str(dev_info.get("product_string", "")))
+    if entry is not None and entry["architecture"] in safety.BLOCKED_ARCHITECTURES:
+        return True
     prod = str(dev_info.get("product_string", "")).lower()
     mfg = str(dev_info.get("manufacturer_string", "")).lower()
-
-    if vid == CONEXANT_VID or (vid, pid) in KNOWN_CONEXANT_DEVICES:
-        return True
-    if "cx31993" in prod or "cx31993" in mfg:
-        return True
-    if "conexant" in prod or "conexant" in mfg:
-        return True
-    return False
+    return "cx31993" in prod or "cx31993" in mfg or "conexant" in prod or "conexant" in mfg
 
 
 def is_ktmicro_candidate(dev_info: Dict[str, Any]) -> bool:
@@ -432,7 +430,7 @@ class KTMicroDSPDevice(BaseDSPDevice):
         self._pid = val
 
     def is_allegro_mini_or_no_pregain(self) -> bool:
-        """Return True if device is Kiwi Ears Allegro Mini (0x31B2) or configured with no_pregain."""
+        """True when the device is Kiwi Ears (0x31B2), records noPregain quirk, or is configured with no_pregain."""
         vid = self._vid if self._vid is not None else self.vendor_id
         if vid == 0x31B2:
             return True
@@ -440,15 +438,19 @@ class KTMicroDSPDevice(BaseDSPDevice):
             return True
         if self.firmware_quirks and self.firmware_quirks.get("no_pregain"):
             return True
-        return False
+        entry = safety.match_device(safety.load_table(), vid, self._pid)
+        return bool(entry) and "noPregain" in (entry.get("quirks") or [])
 
     def supports_dac_filter(self) -> bool:
-        """Return True strictly for FiiO JA11 (0x2972) or unconfigured mock devices."""
+        """True strictly for FiiO JA11 (0x2972) with fiio_dac_filter quirk, or unconfigured mock devices."""
         if self.is_allegro_mini_or_no_pregain():
             return False
         vid = self._vid if self._vid is not None else self.vendor_id
         if vid is None and self.use_mock:
             return True
+        entry = safety.match_device(safety.load_table(), vid, self._pid)
+        if entry:
+            return "fiio_dac_filter" in (entry.get("quirks") or []) or entry.get("architecture") == "fiio_dsp"
         return vid == 0x2972
 
     def connect(self):
@@ -456,14 +458,10 @@ class KTMicroDSPDevice(BaseDSPDevice):
         vid = self._vid if self._vid is not None else self.vendor_id
         pid = self._pid if self._pid is not None else self.product_id
 
-        # Safety Guard Check: Conexant CX31993 per GEMINI.md Rule 2
-        if vid == CONEXANT_VID or (vid == 0x3302 and pid == 0x3365) or (vid, pid) in KNOWN_CONEXANT_DEVICES:
-            raise DeviceSecurityException(
-                f"SAFETY GUARD: Device 0x{vid:04X}:0x{pid or 0:04X} is a Conexant CX31993 DAC. "
-                "The CX31993 has fixed mask ROM and does not support hardware flashing. "
-                "Attempting HID register writes will corrupt OTP descriptors. "
-                "Use 'export-pipewire' or 'export-apo' for host-side DSP."
-            )
+        # Safety guard before anything is opened: identity must be confirmed from the table.
+        # Runs without the hid library so a blocked device is refused even when it is not present.
+        if vid is not None and pid is not None:
+            safety.check_identity(vid, pid)
 
         if self.use_mock:
             self._dev = MockKTDevice(vid or 0x31B2, pid or 0x0111)
@@ -473,20 +471,28 @@ class KTMicroDSPDevice(BaseDSPDevice):
         if hid is None:
             raise DeviceCommunicationError("Python 'hid' library is not available.")
 
-        # If specific path provided, open directly
+        # A path carries no identity: resolve it against the table before opening it.
         if self.path:
+            item = next((i for i in hid.enumerate() if i["path"] == self.path), None)
+            if item is None:
+                raise DeviceSecurityException(
+                    f"SAFETY GUARD: cannot confirm the identity behind path {self.path!r} - it is not in the "
+                    "device table, so writes are refused. Use host-side DSP exporters instead."
+                )
+            entry = safety.check_identity(item["vendor_id"], item["product_id"], item.get("product_string", ""))
+            self._entry = entry
+            self.vendor_id, self.product_id = item["vendor_id"], item["product_id"]
             self._dev = hid.device()
             self._dev.open_path(self.path)
-            self.firmware_quirks = detect_firmware_quirks(vid or 0x31B2, pid or 0x0111, self.release_number)
+            self.release_number = item.get("release_number", 0x0100)
+            self.firmware_quirks = detect_firmware_quirks(self.vendor_id, self.product_id, self.release_number, item.get("product_string", ""))
             return
 
         # If VID/PID specified, find and verify
         if vid is not None and pid is not None:
             for item in hid.enumerate(vid, pid):
-                if is_conexant_cx31993(item):
-                    raise DeviceSecurityException(
-                        f"SAFETY GUARD: Device at {item.get('path')} matches Conexant CX31993. Flashing blocked."
-                    )
+                entry = safety.check_identity(item["vendor_id"], item["product_id"], item.get("product_string", ""))
+                self._entry = entry
                 self._dev = hid.device()
                 self._dev.open_path(item["path"])
                 self.release_number = item.get("release_number", 0x0100)
@@ -601,6 +607,12 @@ class KTMicroDSPDevice(BaseDSPDevice):
         bands = preset.get("bands", [])
         if len(bands) < 5:
             raise ValueError(f"Preset requires 5 bands, got {len(bands)}.")
+
+        # Validate every band against the table before anything is packed: a rejected
+        # write is aborted in full, never partially applied. Frequencies are checked as the
+        # user asked for them, before the compensate_2x halving.
+        for i, b in enumerate(bands):
+            safety.validate_band(self.architecture_name, i, float(b.get("freq", 1000.0)), float(b.get("gain", 0.0)), float(b.get("q", 1.0)))
 
         # 1. Enable EQ slot (Slot 0x03)
         slot_id = preset.get("slot_id", 0x03)
@@ -730,7 +742,11 @@ class KTMicroDSPDevice(BaseDSPDevice):
     def read_current_peq(self, compensate_2x: Optional[bool] = None) -> Dict[str, Any]:
         """Read 5 bands, global preamp, and active slot from the hardware registers.
 
-        If compensate_2x is None, auto-detected from firmware quirks/heuristics.
+        Read-back detection only: this reports what the registers answer, it cannot confirm that an
+        earlier write landed. A fixed-mask-ROM device answers with its ROM contents, not with the
+        values that were written.
+
+        If compensate_2x is None, auto-detected from the device table quirks/heuristics.
         """
         if compensate_2x is None:
             compensate_2x = bool(self.firmware_quirks.get("requires_compensate_2x", False)) if self.firmware_quirks else False

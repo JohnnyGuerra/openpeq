@@ -2,6 +2,7 @@
  * WebHID Transport, Register Framing (KTMicro KT02H20 & Moondrop FreeDSP),
  * Firmware Clock Quirk Detection, NVRAM Wear Tracker, and Event-Driven USB Re-Enumeration.
  */
+import { entryFor } from "./safety_guard.js";
 
 export const KTMICRO_FILTERS = [
   { vendorId: 0x31b2 }, // KTMicro / Kiwi Ears Allegro Mini / Moondrop FreeDSP
@@ -13,25 +14,13 @@ export const KTMICRO_FILTERS = [
 ];
 
 export function isMoondropFreeDsp(dev) {
-  if (!dev) return false;
-  const prod = (dev.productName || "").toLowerCase();
-  return (
-    (dev.vendorId === 0x31b2 && dev.productId === 0x0112) ||
-    prod.includes("freedsp") ||
-    prod.includes("may dsp")
-  );
+  const entry = entryFor(dev);
+  return Boolean(entry) && entry.architecture === "moondrop_dsp";
 }
 
 export function isWalkplayDsp(dev) {
-  if (!dev) return false;
-  const prod = (dev.productName || "").toLowerCase();
-  return (
-    (dev.vendorId === 0x3302 && (dev.productId === 0xc20f || dev.productId === 0x43cc || dev.productId === 0x4307 || dev.productId === 0x431d)) ||
-    prod.includes("protocol micro") ||
-    prod.includes("protocol max") ||
-    prod.includes("space pro") ||
-    prod.includes("crinear")
-  );
+  const entry = entryFor(dev);
+  return Boolean(entry) && entry.architecture === "walkplay_dsp";
 }
 
 // ── NVRAM Flash Wear-Out Health Tracker ───────────────────────────────────────
@@ -129,35 +118,12 @@ export function hasStockBackup(dev, slotId = 3, storage = globalThis.localStorag
 // firmware revision behaves differently.
 export function detectFirmwareQuirks(dev) {
   if (!dev) return { requiresCompensate2X: false, reason: "No device" };
-  const vid = dev.vendorId || 0;
-  const pid = dev.productId || 0;
-  const prodName = (dev.productName || "").toLowerCase();
-
-  if (isMoondropFreeDsp(dev)) {
-    return {
-      requiresCompensate2X: false,
-      reason: "Moondrop FreeDSP 9-Band Architecture: Standard clocking",
-    };
+  const entry = entryFor(dev);
+  if (entry && (entry.quirks || []).includes("compensate2x")) {
+    return { requiresCompensate2X: true, reason: `${entry.name}: 2X clock divisor compensation (toggleable via checkbox)` };
   }
-
-  // FiiO JA11 (VID 0x2972): Firmware v1.8+ has the 2X clock divisor bug patched upstream.
-  // Because WebHID lacks bcdDevice, default to native clocking; user can toggle checkbox if on legacy firmware.
-  if (vid === 0x2972) {
-    return {
-      requiresCompensate2X: false,
-      reason: "FiiO JA11: Native clocking (firmware v1.8+ default; toggle via checkbox if running legacy firmware)",
-    };
-  }
-
-  // Generic KT02H20 / WalkPlay (VID 0x31b2, 0x0bda:0x0023) or Allegro Mini
-  if (vid === 0x31b2 || (vid === 0x0bda && pid === 0x0023) || prodName.includes("allegro")) {
-    return {
-      requiresCompensate2X: true,
-      reason: "KT02H20 quirk (Allegro Mini): 48kHz clock requires 2X divisor compensation (toggleable via checkbox)",
-    };
-  }
-
-  return { requiresCompensate2X: false, reason: "Standard clocking" };
+  if (!entry) return { requiresCompensate2X: false, reason: "Device not in the table: no clocking assumption" };
+  return { requiresCompensate2X: false, reason: `${entry.name}: standard clocking` };
 }
 
 // ── Packet Encoders ───────────────────────────────────────────────────────────
@@ -298,9 +264,12 @@ export function waitForUsbReenumeration(hidApi, filters = KTMICRO_FILTERS, timeo
 // ── Two-Way WebHID Register Readback ──────────────────────────────────────────
 
 export async function sendKtMicroFilter(dev, filterVal = 1) {
-  const isFiio = Boolean(dev && (dev.vendorId === 0x2972 || dev.vendorId === 10610));
-  if (!isFiio) {
-    throw new Error("SAFETY BLOCK: Register 0x11 (DAC Filter) is strictly a FiiO JA11 (0x2972) feature and is blocked on other KTMicro hardware (0x31B2) to prevent volume control lockout.");
+  const entry = entryFor(dev);
+  if (!entry || !(entry.quirks || []).includes("fiio_dac_filter")) {
+    const vidHex = "0x" + ((dev && dev.vendorId) || 0).toString(16).toUpperCase();
+    throw new Error(
+      `SAFETY BLOCK: Register 0x11 (DAC Filter) is a FiiO hardware-DSP feature and is blocked on ${entry ? entry.name : "other hardware"} (${vidHex}) to prevent volume control lockout.`
+    );
   }
   const REPORT_ID = 0x4b;
   const CMD_WRITE = 0x57;
@@ -402,8 +371,9 @@ export function readKtMicroRegister(dev, reg, timeoutMs = 500) {
 
 export async function readKtMicroPeq(dev, options = {}) {
   const compensate2X = typeof options === "boolean" ? options : Boolean(options && options.compensate2X);
+  const entry = entryFor(dev);
   const isNoPregain = Boolean(options && typeof options === "object" && options.noPregain) ||
-    Boolean(dev && (dev.vendorId === 0x31B2 || dev.vendorId === 0x31b2 || dev.vendorId === 12722));
+    Boolean(entry && (entry.quirks || []).includes("noPregain"));
 
   // 1. Slot (0x24)
   let slotId = 3;
@@ -431,7 +401,7 @@ export async function readKtMicroPeq(dev, options = {}) {
 
   // 3. DAC filter (0x11)
   let dacFilter = null;
-  const isFiio = Boolean(dev && (dev.vendorId === 0x2972 || dev.vendorId === 10610)) && !isNoPregain;
+  const isFiio = Boolean(entry && (entry.quirks || []).includes("fiio_dac_filter")) && !isNoPregain;
   if (isFiio) {
     try {
       const filtResp = await readKtMicroRegister(dev, 0x11, 200);
@@ -570,7 +540,13 @@ export function computeWalkplayBiquad(freq, gain, q) {
 
   const quant = [iArr2[0], iArr2[1], iArr2[2], -iArr[1], -iArr[2]];
   const dv = new DataView(bArr.buffer);
-  quant.forEach((v, idx) => dv.setInt32(idx * 4, v, true));
+  quant.forEach((v, idx) => {
+    // No silent wrap: a value that does not fit int32 is refused, not truncated.
+    if (v < -2147483648 || v > 2147483647) {
+      throw new Error(`SAFETY GUARD: coefficient ${idx} out of int32 range (${v}) for freq ${freq} Hz, gain ${gain} dB, Q ${q}.`);
+    }
+    dv.setInt32(idx * 4, v, true);
+  });
   return bArr;
 }
 
@@ -590,9 +566,20 @@ export function encodeWalkplayFilterPacket(filterIdx, freq, gain, q, typeStr = "
   const biquad = computeWalkplayBiquad(freq, gain, q);
   pkt.set(biquad, 7);
 
-  const freqU16 = Math.round(Math.max(10, Math.min(48000, freq)));
-  const qU16 = Math.round(Math.max(1, Math.min(65535, q * 256)));
-  const gainI16 = Math.round(Math.max(-32768, Math.min(32767, gain * 256)));
+  // Refuse, never clamp: the guard has already checked the accepted ranges, this
+  // is the backstop that stops a value that cannot be packed.
+  if (!Number.isFinite(freq) || freq <= 0 || freq > 65535) {
+    throw new Error(`SAFETY GUARD: write rejected - band ${filterIdx}: freq ${freq} Hz cannot be packed (uint16).`);
+  }
+  if (!Number.isFinite(q) || q <= 0 || q * 256 > 65535) {
+    throw new Error(`SAFETY GUARD: write rejected - band ${filterIdx}: Q ${q} cannot be packed (uint16 x256).`);
+  }
+  if (!Number.isFinite(gain) || gain * 256 < -32768 || gain * 256 > 32767) {
+    throw new Error(`SAFETY GUARD: write rejected - band ${filterIdx}: gain ${gain} dB cannot be packed (int16 x256).`);
+  }
+  const freqU16 = Math.round(freq);
+  const qU16 = Math.round(q * 256);
+  const gainI16 = Math.round(gain * 256);
 
   const dv = new DataView(pkt.buffer);
   dv.setUint16(27, freqU16, true);

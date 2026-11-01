@@ -17,6 +17,8 @@ import struct
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
+from dac_peq import safety
+
 try:
     import hid
 except ImportError:
@@ -138,9 +140,10 @@ def encode_walkplay_filter_packet(
     header = bytes([0x01, 0x09, 0x18, 0x00, filter_idx & 0xFF, 0x00, 0x00])
     biquad = compute_walkplay_biquad(freq, gain, q)
 
-    freq_u16 = int(round(max(10.0, min(48000.0, freq))))
-    q_u16 = int(round(max(1.0, min(65535.0, q * 256.0))))
-    gain_i16 = int(round(max(-32768.0, min(32767.0, gain * 256.0))))
+    # No silent clamping: reached only after safety.validate_band has accepted the band.
+    freq_u16 = int(round(freq))
+    q_u16 = int(round(q * 256.0))
+    gain_i16 = int(round(gain * 256.0))
 
     meta = struct.pack("<HHh", freq_u16, q_u16, gain_i16)
     suffix = bytes([type_id, 0x00, slot & 0xFF, 0x00])
@@ -246,6 +249,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
         return "walkplay_dsp"
 
     def connect(self) -> None:
+        safety.check_identity(self.vendor_id or self.CRINEAR_VID, self.product_id or self.PROTOCOL_MICRO_PID)
         if self.use_mock:
             self._dev = MockWalkPlayDevice(
                 self.vendor_id or self.CRINEAR_VID,
@@ -282,6 +286,11 @@ class WalkPlayDSPDevice(BaseDSPDevice):
         if len(bands) > self.max_bands:
             from dac_peq.biquad import decimate_bands
             bands = decimate_bands(bands, target_bands=self.max_bands)
+
+        # Validate every band against the table before anything is packed: a rejected
+        # write is aborted in full, never partially applied.
+        for i, b in enumerate(bands):
+            safety.validate_band(self.architecture_name, i, float(b.get("freq", 1000.0)), float(b.get("gain", 0.0)), float(b.get("q", 1.0)))
 
         default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID) else 101
         slot = preset.get("slot_id", default_slot)

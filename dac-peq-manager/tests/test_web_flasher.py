@@ -6,6 +6,7 @@ Executes Web modules in Node.js to verify browser-side security invariants and m
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,8 @@ import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
+
+pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is needed to execute the web modules")
 
 
 def run_node_eval(js_code: str) -> dict:
@@ -925,7 +928,8 @@ def test_webhid_detect_firmware_quirks_no_device_version_hallucination():
     # WalkPlay 0x0bda:0x0023 is 2X compensation
     assert res["walkplayComp2X"] is True
     # Product name with "allegro" is 2X compensation
-    assert res["genericAllegroComp2X"] is True
+    # Identity cannot be confirmed from a product name: the guard fails closed
+    assert res["genericAllegroComp2X"] is False
     # Generic other is false
     assert res["genericOtherComp2X"] is False
     # Null device is false
@@ -961,3 +965,189 @@ def test_web_app_preamp_safety_clamping_and_null_handling():
     assert res["normalNeg"] == 249   # -7 signed byte
 
 
+
+
+def test_browser_guard_refuses_unknown_device():
+    """Same rule as Python: a device the table cannot confirm is refused."""
+    result = run_node_eval("""
+import { readFileSync } from "node:fs";
+import { guardWrite, matchDevice } from "./modules/safety_guard.js";
+const table = JSON.parse(readFileSync("dacs.json", "utf8"));
+const device = matchDevice(table, 0x1234, 0x5678, "Mystery DAC");
+const guard = guardWrite(table, device, [{ freq: 1000, gain: 0, q: 1 }]);
+console.log(JSON.stringify({ ok: guard.ok, problems: guard.problems }));
+""")
+    assert result["ok"] is False
+    assert "device identity could not be confirmed" in result["problems"][0]
+
+
+def test_browser_guard_refuses_out_of_range_and_names_band():
+    result = run_node_eval("""
+import { readFileSync } from "node:fs";
+import { guardWrite, matchDevice } from "./modules/safety_guard.js";
+const table = JSON.parse(readFileSync("dacs.json", "utf8"));
+const device = matchDevice(table, 0x3302, 0xc20f);
+const bands = [{ freq: 1000, gain: 0, q: 1 }, { freq: 2000, gain: 1, q: 1 },
+               { freq: 3000, gain: 2, q: 1 }, { freq: 30000, gain: 3, q: 1 }];
+const guard = guardWrite(table, device, bands);
+console.log(JSON.stringify({ ok: guard.ok, problems: guard.problems }));
+""")
+    assert result["ok"] is False
+    assert any("band 3" in p for p in result["problems"])
+    assert any("30000 Hz" in p for p in result["problems"])
+
+
+def test_browser_guard_fails_closed_when_table_cannot_be_read():
+    result = run_node_eval("""
+import { guardWrite } from "./modules/safety_guard.js";
+const guard = guardWrite(null, null, [{ freq: 1000, gain: 0, q: 1 }]);
+console.log(JSON.stringify({ ok: guard.ok, problems: guard.problems }));
+""")
+    assert result["ok"] is False
+    assert "could not be read" in result["problems"][0]
+
+
+def test_browser_encode_refuses_instead_of_wrapping():
+    """No silent clamp or int32 wrap: the packet is never built, so nothing is sent."""
+    result = run_node_eval("""
+import { readFileSync } from "node:fs";
+import { guardWrite, matchDevice, rangesFor } from "./modules/safety_guard.js";
+import { encodeWalkplayFilterPacket } from "./modules/hid_transport.js";
+const table = JSON.parse(readFileSync("dacs.json", "utf8"));
+const device = matchDevice(table, 0x3302, 0xc20f);
+const refused = guardWrite(table, device, [{ freq: 30000, gain: 0, q: 1 }]);
+let threw = "";
+try { encodeWalkplayFilterPacket(3, 70000, 0, 1); } catch (e) { threw = e.message; }
+let wrapped = "";
+try { encodeWalkplayFilterPacket(3, 1000, 100, 0.1); } catch (e) { wrapped = e.message; }
+console.log(JSON.stringify({ refused: refused.ok, threw, wrapped }));
+""")
+    assert result["refused"] is False
+    assert "SAFETY GUARD" in result["threw"] and "band 3" in result["threw"]
+    assert "SAFETY GUARD" in result["wrapped"] and "int32" in result["wrapped"]
+
+
+def test_web_safety_guard_refuses_conexant_and_unconfirmed_identity():
+    """Same rule as Python/Rust: only a table match may be written, and the fixed
+    mask ROM is refused even when its id is known."""
+    js_code = """
+import fs from 'node:fs';
+import { loadTable, matchDevice, guardWrite } from './modules/safety_guard.js';
+const table = JSON.parse(fs.readFileSync('dacs.json', 'utf8'));
+const cx = matchDevice(table, 0x3302, 0x3365, 'CX31993 DSP');
+const unknown = matchDevice(table, 0x18d1, 0x1908, 'Something Unknown');
+console.log(JSON.stringify({
+  cx_arch: cx && cx.architecture,
+  cx_refused: guardWrite(table, cx, []).problems,
+  unknown: unknown === null,
+  unknown_refused: guardWrite(table, null, []).problems,
+  ok_refused: guardWrite(table, matchDevice(table, 0x31b2, 0x111, ''), []).problems,
+}));
+"""
+    out = run_node_eval(js_code)
+    assert out["cx_arch"] == "conexant_fixed"
+    assert any("fixed mask ROM" in p for p in out["cx_refused"])
+    assert out["unknown"] is True
+    assert any("identity could not be confirmed" in p for p in out["unknown_refused"])
+    assert out["ok_refused"] == []
+
+
+def test_web_safety_guard_rejects_out_of_range_band_before_packing():
+    """Validate before packing: the guard rejects the band, so no packet is built,
+    and the packer itself refuses anything it cannot represent (no silent truncation)."""
+    js_code = """
+import fs from 'node:fs';
+import { bandProblems } from './modules/safety_guard.js';
+import { encodeWalkplayFilterPacket } from './modules/hid_transport.js';
+const table = JSON.parse(fs.readFileSync('dacs.json', 'utf8'));
+const problems = bandProblems(table, 'walkplay_dsp', 3, 48001, 0, 4);
+const packets = [];
+if (problems.length === 0) packets.push(encodeWalkplayFilterPacket(3, 48001, 0, 4));
+let backstop = null;
+try { encodeWalkplayFilterPacket(3, 70000, 0, 4); } catch (e) { backstop = e.message; }
+console.log(JSON.stringify({ problems, packets, backstop }));
+"""
+    out = run_node_eval(js_code)
+    assert any("accepted 0 to 20000 Hz" in p for p in out["problems"])
+    assert out["packets"] == [], "a rejected band must not produce a partial packet"
+    assert "cannot be packed" in out["backstop"] and "band 3" in out["backstop"]
+
+
+def test_web_guard_reads_the_shared_table():
+    """Issue #8: the browser guard reads the same table the CLI and Rust core read,
+    so the rule lives in one place."""
+    web_table = WEB_DIR / "dacs.json"
+    source = ROOT_DIR / "src" / "dac_peq" / "data" / "dacs.json"
+    assert web_table.resolve() == source.resolve(), "web/dacs.json must be the shared table, not a copy"
+    out = run_node_eval("""
+import fs from 'node:fs';
+import { loadTable, rangesFor } from './modules/safety_guard.js';
+const table = JSON.parse(fs.readFileSync('dacs.json', 'utf8'));
+let unknown_arch = null;
+try { unknown_arch = rangesFor(table, 'not_in_the_table'); } catch (_) {}
+console.log(JSON.stringify({
+  devices: table.devices.length,
+  walkplay: rangesFor(table, 'walkplay_dsp'),
+  unknown_arch,
+}));
+""")
+    assert out["devices"] == 43
+    assert out["walkplay"] == {"freq_max_hz": 20000, "q_min": 0.1, "q_max": 10.0,
+                                "gain_min_db": -12.0, "gain_max_db": 12.0}
+    assert out["unknown_arch"] is None
+
+
+def test_web_guard_does_not_infer_architecture_from_vendor_id():
+    """Issue #8: no architecture or identity may be inferred from a vendor id alone."""
+    offenders = []
+    for f in ("app.js", "modules/hid_transport.js", "modules/safety_guard.js"):
+        text = (WEB_DIR / f).read_text()
+        for i, line in enumerate(text.splitlines(), 1):
+            if "vendorId === 0x" in line or "vendorId === 1" in line or "productId === 0x" in line:
+                offenders.append(f"{f}:{i}: {line.strip()}")
+    assert not offenders, "vendor-id-based inference remains:\n" + "\n".join(offenders)
+
+    out = run_node_eval("""
+import fs from 'node:fs';
+import { matchDevice } from './modules/safety_guard.js';
+const table = JSON.parse(fs.readFileSync('dacs.json', 'utf8'));
+console.log(JSON.stringify({
+  known_vendor_unknown_product: matchDevice(table, 0x3302, 0x9999, ''),
+  table_match: matchDevice(table, 0x3302, 0xc20f, ''),
+}));
+""")
+    assert out["known_vendor_unknown_product"] is None, "a known vendor id with an unknown product id must not be routed"
+    assert out["table_match"]["architecture"] == "walkplay_dsp"
+
+
+def test_browser_resolves_identity_only_from_the_shared_table():
+    """Issue #8: the browser reads the same table as Python and Rust, and never infers an
+    architecture from a vendor id."""
+    for name in ("app.js", "modules/hid_transport.js", "modules/safety_guard.js"):
+        src = (WEB_DIR / name).read_text()
+        assert "vendorId === 0x" not in src, f"{name} infers architecture from a vendor id"
+        assert "productId === 0x" not in src, f"{name} infers architecture from a product id"
+
+    # Same file as Python and Rust, not a browser copy.
+    assert (WEB_DIR / "dacs.json").resolve() == (ROOT_DIR / "src" / "dac_peq" / "data" / "dacs.json").resolve()
+
+    res = run_node_eval("""
+    import { readFileSync } from "node:fs";
+    import { bandProblems, entryFor } from "./modules/safety_guard.js";
+    const table = JSON.parse(readFileSync("dacs.json", "utf8"));
+    const unknown = { vendorId: 0x9999, productId: 0x8888, productName: "Generic Allegro DAC" };
+    const known = { vendorId: 0x31B2, productId: 0x0111, productName: "Kiwi Ears Allegro Mini" };
+    const knownEntry = entryFor(known);
+    let rangesErr = "";
+    try { bandProblems(table, "not_in_the_table", 0, 1000, 0, 1); } catch (e) { rangesErr = e.message; }
+    console.log(JSON.stringify({
+      unknownEntry: entryFor(unknown),
+      knownEntryName: knownEntry ? knownEntry.name : null,
+      knownNeeds2X: (knownEntry.quirks || []).includes("compensate2x"),
+      rangesErr
+    }));
+    """)
+    assert res["unknownEntry"] is None
+    assert res["knownEntryName"] == "Kiwi Ears Allegro Mini"
+    assert res["knownNeeds2X"] is True
+    assert "SAFETY GUARD" in res["rangesErr"]

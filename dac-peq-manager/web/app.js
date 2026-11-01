@@ -19,6 +19,8 @@ import {
   smoothCouplerBiquads,
 } from "./modules/biquad_math.js";
 
+import { BLOCKED_ARCHITECTURES, entryFor, guardWrite, loadTable, matchDevice, setTable } from "./modules/safety_guard.js";
+
 import {
   formatPipeWireConf,
   formatEqualizerApo,
@@ -220,6 +222,7 @@ let connectedHidDevice = null;
 let connectedDeviceProfile = null;
 let isDemoMode = false;
 let isConexantBlocked = false;
+let guardTable = null; // the single source of truth; null until it can be read
 let isRebootingPostCommit = false;
 let autoApplyTimer = null;
 let activeDragIndex = null;
@@ -249,8 +252,9 @@ function resetMacroControls(newBaselineBands = null) {
 function updateEqCapsBadge(dev = null) {
   const badge = document.getElementById("eqCapsBadge");
   const activeDev = dev || connectedHidDevice;
-  const isJa11 = activeDev && (activeDev.vendorId === 0x2972 || activeDev.vendorId === 10610);
-  const isKiwiMini = activeDev && (activeDev.vendorId === 0x31b2 || activeDev.vendorId === 12722) && activeHardwareBands === 5;
+  const activeEntry = entryFor(activeDev);
+  const isJa11 = Boolean(activeEntry && (activeEntry.quirks || []).includes("fiio_dac_filter"));
+  const isKiwiMini = Boolean(activeEntry && (activeEntry.quirks || []).includes("noPregain")) && activeHardwareBands === 5;
   const isWalkplay = activeHardwareBands === 8 || activeHardwareBands === 10 || (activeDev && isWalkplayDsp(activeDev));
   const isMoondrop = activeHardwareBands === 9 || (activeDev && isMoondropFreeDsp(activeDev));
 
@@ -711,6 +715,18 @@ export function onDragTouchEnd() {
   window.removeEventListener("touchend", onDragTouchEnd);
 }
 
+// ── Flash Wear Levels (shared by the badge and the NVRAM confirm dialog) ──────
+const WEAR_HIGH_TOTAL = 50;
+const WEAR_HIGH_24H = 10;
+const WEAR_MODERATE_24H = 5;
+
+function wearLevel(stats) {
+  const writes24h = stats.timestamps.filter((t) => t > Date.now() - 24 * 3600 * 1000).length;
+  if (stats.total >= WEAR_HIGH_TOTAL || writes24h >= WEAR_HIGH_24H) return { level: "high", writes24h };
+  if (writes24h >= WEAR_MODERATE_24H) return { level: "moderate", writes24h };
+  return { level: "low", writes24h };
+}
+
 // ── Flash Counter UI Badge ────────────────────────────────────────────────────
 function updateFlashCounterBadge(dev) {
   const badge = document.getElementById("nvramWearBadge") || document.getElementById("flashCounterBadge");
@@ -723,18 +739,18 @@ function updateFlashCounterBadge(dev) {
   }
 
   const stats = getFlashStats(dev);
-  const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-  const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+  const wear = wearLevel(stats);
+  const writes24h = wear.writes24h;
 
   lbl.textContent = stats.total;
   badge.style.display = "inline-flex";
 
   const wearDisclaimer = "Local browser estimated write counter; not read from hardware telemetry";
-  if (stats.total >= 50 || writes24h >= 10) {
+  if (wear.level === "high") {
     lbl.style.color = "var(--accent-red)";
     badge.style.borderColor = "var(--accent-red)";
     badge.title = `⚠️ HIGH NVRAM FLASH WEAR! ${writes24h} writes in last 24h, ${stats.total} total writes. EEPROM wear limit approaching. (${wearDisclaimer})`;
-  } else if (writes24h >= 5) {
+  } else if (wear.level === "moderate") {
     lbl.style.color = "var(--accent-yellow)";
     badge.style.borderColor = "var(--accent-yellow)";
     badge.title = `Moderate flash wear: ${writes24h} writes in last 24h, ${stats.total} total writes. (${wearDisclaimer})`;
@@ -801,7 +817,7 @@ export async function initializeDevice(dev, isSilent = false) {
 
     // Switch hardware band architecture
     if (isWalkplayDsp(dev) || (dacMatch && dacMatch.architecture === "walkplay_dsp")) {
-      const hwBands = (dacMatch && dacMatch.hardware_bands) ? dacMatch.hardware_bands : (dev.productId === 0x43cc ? 10 : 8);
+      const hwBands = (dacMatch && dacMatch.hardware_bands) ? dacMatch.hardware_bands : 8;
       setHardwareBandArchitecture(hwBands);
     } else if (isMoondropFreeDsp(dev) || (dacMatch && dacMatch.architecture === "moondrop_dsp")) {
       setHardwareBandArchitecture(9);
@@ -816,7 +832,13 @@ export async function initializeDevice(dev, isSilent = false) {
     }
 
     // Conexant Safety Check
-    if (dev.vendorId === 0x0572 || prodName.toLowerCase().includes("cx31993") || (dacMatch && dacMatch.dac_type === "fixed_mask_rom")) {
+    const isFixedMask = Boolean(
+      (dacMatch && BLOCKED_ARCHITECTURES.has(dacMatch.architecture)) ||
+      (dacMatch && dacMatch.dac_type === "fixed_mask_rom") ||
+      prodName.toLowerCase().includes("cx31993") ||
+      prodName.toLowerCase().includes("conexant")
+    );
+    if (isFixedMask) {
       isConexantBlocked = true;
       updateDeviceBadge("blocked", `${dacDisplayName} - Fixed Mask ROM`);
       document.getElementById("safetyAlert").classList.add("visible");
@@ -940,17 +962,29 @@ async function applyToDevice(commitFlash = false) {
     return;
   }
 
+  // The guard runs before anything is sent: unknown device, blocked architecture, or
+  // an out-of-range coefficient aborts the whole write.
+  // shortcut: demo mode sends nothing, so the guard does not apply there.
+  if (!isDemoMode) {
+    const guardDevice = matchDevice(guardTable, connectedHidDevice.vendorId, connectedHidDevice.productId, connectedHidDevice.productName);
+    const guard = guardWrite(guardTable, guardDevice, currentPreset.bands);
+    if (!guard.ok) {
+      showToast(`Write refused: ${guard.problems.join("; ")}`);
+      return;
+    }
+  }
+
   if (commitFlash && !isDemoMode) {
     const stats = getFlashStats(connectedHidDevice);
-    const oneDayAgo = Date.now() - 24 * 3600 * 1000;
-    const writes24h = stats.timestamps.filter((t) => t > oneDayAgo).length;
+    const wear = wearLevel(stats);
 
     let wearWarning = "";
-    if (writes24h >= 10 || stats.total >= 50) {
+    if (wear.level === "high") {
       wearWarning =
         `⚠️ FLASH SILICON WEAR WARNING!\n` +
-        `This DAC has received ${writes24h} NVRAM writes in the last 24 hours (${stats.total} total writes).\n` +
-        `Budget EEPROMs degrade after repeated writing. Writing too frequently can permanently wear out the DSP memory.\n\n`;
+        `This DAC has received ${wear.writes24h} NVRAM writes in the last 24 hours (${stats.total} total writes).\n` +
+        `Budget EEPROMs degrade after repeated writing. Writing too frequently can permanently wear out the DSP memory.\n` +
+        `Nothing on the device enforces its endurance limit — this warning is informational.\n\n`;
     }
 
     const ok = confirm(
@@ -967,7 +1001,8 @@ async function applyToDevice(commitFlash = false) {
 
   const compensate2X = document.getElementById("chkCompensate2X")?.checked || false;
   const selSlot = document.getElementById("selHardwareSlot");
-  const slotId = selSlot ? parseInt(selSlot.value, 10) || 3 : 3;
+  const parsedSlot = parseInt(selSlot?.value, 10);
+  const slotId = Number.isNaN(parsedSlot) ? 3 : parsedSlot;
 
   // Automatic First-Commit Stock Safety Snapshot
   if (commitFlash && connectedHidDevice && !isDemoMode) {
@@ -1075,12 +1110,13 @@ async function applyToDevice(commitFlash = false) {
     }
 
     // 3. Preamp (Register 0x66 in 0.5 dB steps)
-    // Only write 0x66 if supported; Kiwi Ears Allegro Mini (0x31B2) uses unity gain (noPregain).
+    // Only write 0x66 when the table says preamp is supported. The table records the noPregain
+    // quirk for devices where writing 0x66 locks out volume control (e.g. Kiwi Ears Allegro Mini).
     // Note: Always write 0x66 even when preamp is 0.0 dB (preampByte = 0x00) to clear prior digital
     // attenuation from previous profiles (audit credit: Captain Ødegard, Head-Fi).
     // Preamp is clamped to [-24.0, +12.0] dB to prevent signed int8 sign inversion/acoustic clipping hazard.
-    const isKiwiMini = connectedHidDevice && (connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722);
-    if (!isKiwiMini) {
+    const entry = entryFor(connectedHidDevice);
+    if (!(entry && (entry.quirks || []).includes("noPregain"))) {
       const rawVal = Number(currentPreset.preamp ?? 0.0);
       const safeVal = Number.isFinite(rawVal) ? rawVal : 0.0;
       const clampedPreamp = Math.max(-24.0, Math.min(12.0, safeVal));
@@ -1089,11 +1125,12 @@ async function applyToDevice(commitFlash = false) {
     }
 
     // 3b. Hardware DAC reconstruction filter (Register 0x11)
-    // Register 0x11 is strictly a FiiO JA11 (0x2972) feature; on KTMicro Allegro Mini, writing 0x11 corrupts volume registers!
-    const isFiio = connectedHidDevice && (connectedHidDevice.vendorId === 0x2972 || connectedHidDevice.vendorId === 10610);
+    // Register 0x11 is a FiiO hardware-DSP feature; writing it on other hardware corrupts volume registers.
+    const isFiio = Boolean(entry) && entry.architecture === "fiio_dsp";
     const selDac = document.getElementById("selDacFilter");
     if (selDac && isFiio) {
-      const filterVal = parseInt(selDac.value, 10) || 1;
+      const parsedFilter = parseInt(selDac.value, 10);
+      const filterVal = Number.isNaN(parsedFilter) ? 1 : parsedFilter;
       await sendKtMicroFilter(connectedHidDevice, filterVal);
     }
 
@@ -1339,10 +1376,7 @@ export async function clearDeviceFlash() {
   // Check connected device architecture before sending sendKtMicroClearFlash
   const isNonKtmicro = connectedDeviceProfile && connectedDeviceProfile.arch &&
     connectedDeviceProfile.arch !== "ktmicro" && connectedDeviceProfile.arch !== "ktmicro_dsp";
-  const isMoondrop = connectedHidDevice && (
-    (connectedHidDevice.vendorId === 0x31B2 || connectedHidDevice.vendorId === 0x31b2 || connectedHidDevice.vendorId === 12722) &&
-    (connectedHidDevice.productId === 0x0112 || connectedHidDevice.productId === 274)
-  );
+  const isMoondrop = connectedHidDevice && isMoondropFreeDsp(connectedHidDevice);
   const isWalkplay = connectedHidDevice && isWalkplayDsp(connectedHidDevice);
 
   if (isNonKtmicro || isMoondrop || isWalkplay) {
@@ -2103,19 +2137,17 @@ const DEFAULT_DACS = [
 
 async function loadDacDatabase() {
   dacCatalog = DEFAULT_DACS;
+  guardTable = null;
   renderDacDirectory();
 
   try {
-    const res = await fetch("dacs.json");
-    if (res.ok) {
-      const fullList = await res.json();
-      if (Array.isArray(fullList) && fullList.length > 0) {
-        dacCatalog = fullList;
-        renderDacDirectory();
-      }
-    }
+    guardTable = setTable(await loadTable("dacs.json"));
+    dacCatalog = guardTable.devices;
+    renderDacDirectory();
   } catch (err) {
-    console.warn("Could not fetch external dacs.json, using embedded catalog:", err);
+    // Fail closed: the embedded catalog is enough to show the directory, but writes
+    // are refused until the guard can read the table.
+    console.warn("Could not read dacs.json; UI catalog only, writes are refused:", err);
   }
 }
 
@@ -2858,7 +2890,7 @@ window.addEventListener("DOMContentLoaded", () => {
         .then(async (paired) => {
           if (paired && paired.length > 0 && !connectedHidDevice) {
             const matched = paired.find(
-              (d) => KTMICRO_FILTERS.some((f) => f.vendorId === d.vendorId) || d.vendorId === 0x0572
+              (d) => KTMICRO_FILTERS.some((f) => f.vendorId === d.vendorId) || Boolean(entryFor(d))
             );
             if (matched) {
               await initializeDevice(matched, true);

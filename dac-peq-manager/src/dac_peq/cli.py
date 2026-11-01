@@ -54,6 +54,12 @@ from dac_peq.ktmicro_hid import (
 )
 from dac_peq.transport import get_dsp_device
 
+def _warn_flash_history(tracker: FlashWearTracker) -> None:
+    """A corrupted history file means the wear count is no longer trustworthy."""
+    if tracker.load_error:
+        console.print(f"[bold yellow][FLASH HISTORY][/bold yellow] {tracker.load_error}")
+
+
 app = typer.Typer(
     name="dac-peq-manager",
     help="Hardware DSP Flasher & Host PEQ Suite for Portable USB-C DACs & Tribrid IEMs",
@@ -188,7 +194,8 @@ def cmd_scan():
     console.print(
         "\n[bold]Legend:[/bold]\n"
         "  [green]* KTMicro KT02H20 / WalkPlay SoC:[/green] 5-Band hardware biquad NVRAM flasher available.\n"
-        "  [yellow]* Conexant CX31993 (JM6 Pro):[/yellow] Fixed mask ROM. Flashing blocked. Use 'export-pipewire' or 'export-apo'."
+        "  [yellow]* Conexant CX31993 (JM6 Pro):[/yellow] Fixed mask ROM. The guard refuses the write before "
+        "anything is sent; the device itself has no protection. Use 'export-pipewire' or 'export-apo'."
     )
 
 
@@ -309,17 +316,19 @@ def cmd_flash(
     # NVRAM Flash Endurance Protection Check
     dev_key = f"0x{v_id:04X}:0x{p_id:04X}" if (v_id and p_id) else "0x31B2:0x0111"
     tracker = FlashWearTracker()
+    _warn_flash_history(tracker)
     warn, warn_msg = tracker.should_warn(dev_key)
     if warn:
         console.print(f"\n[bold red][FLASH WEAR WARNING][/bold red] {warn_msg}\n")
 
     stats = tracker.get_stats(dev_key)
 
-    # NVRAM Flash Endurance Protection Confirmation
+    # Endurance warning (informational) + confirmation gate — nothing here enforces endurance
     if not yes and not mock:
         burn_stats_str = f" ({stats['total_commits']} total burns, {stats['last_24h_commits']} today)" if stats["total_commits"] > 0 else ""
         confirm = typer.confirm(
-            f"⚠️  NVRAM Flash commits permanently to onboard physical flash memory (~10k-100k cycle endurance){burn_stats_str}. Commit settings now?",
+            f"⚠️  NVRAM Flash commits permanently to onboard physical flash memory (~10k-100k cycle endurance, "
+            f"not enforced by the device){burn_stats_str}. Commit settings now?",
             default=True,
         )
         if not confirm:
@@ -582,6 +591,7 @@ def cmd_flash_history(
 ):
     """Inspect NVRAM flash endurance statistics and wear metrics."""
     tracker = FlashWearTracker()
+    _warn_flash_history(tracker)
     if clear:
         tracker.clear(device_id)
         target = f"for {device_id}" if device_id else "across all devices"

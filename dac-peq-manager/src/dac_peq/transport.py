@@ -14,6 +14,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from dac_peq import safety
+
 try:
     import hid
 except ImportError:
@@ -98,54 +100,75 @@ def get_dsp_device(
     if mock is not None:
         use_mock = mock
 
-    # Conexant CX31993 hardware safety guardrail per GEMINI.md Rule 2
-    if vendor_id == 0x0572 or (vendor_id == 0x3302 and product_id == 0x3365):
-        raise ValueError(
-            f"SAFETY GUARD: Device 0x{vendor_id:04X}:0x{product_id or 0:04X} matches Conexant CX31993. "
+    table = safety.load_table()
+    entry = safety.match_device(table, vendor_id, product_id) if vendor_id and product_id else None
+
+    if path and not use_mock:
+        # A path names a node, not a device: confirm what is actually behind it before writing.
+        resolved = safety.resolve_path_identity(table, path)
+        if resolved is None:
+            raise safety.DeviceSecurityException(
+                f"SAFETY GUARD: cannot confirm the identity of the device at path {path!r} - "
+                "it is not in the device table, so writes are refused. Use host-side DSP exporters."
+            )
+        if entry is not None and (entry["vid"], entry["pid"]) != (resolved["vid"], resolved["pid"]):
+            raise safety.DeviceSecurityException(
+                f"SAFETY GUARD: path {path!r} is {resolved['name']} "
+                f"(0x{resolved['vid']:04X}:0x{resolved['pid']:04X}) but the requested ids describe "
+                f"{entry['name']} (0x{entry['vid']:04X}:0x{entry['pid']:04X}) - mismatch, so writes are refused."
+            )
+        entry = resolved
+
+    # Device table is the single source of truth for identity and ranges
+    if entry is not None and entry["architecture"] in safety.BLOCKED_ARCHITECTURES:
+        raise safety.DeviceSecurityException(
+            f"SAFETY GUARD: Device 0x{vendor_id:04X}:0x{product_id or 0:04X} matches {entry['chipset']}. "
             "Hardware DSP access blocked per GEMINI.md Rule 2. "
-            "Conexant CX31993 uses fixed mask ROM with OTP registers. "
+            f"{entry['chipset']} uses fixed mask ROM with OTP registers. "
             "Use host-side DSP exporters (export-pipewire, export-apo)."
         )
 
-    # When no VID/PID is provided and not running in mock mode, attempt auto-discovery
+    def driver_for(e, vid, pid, dev_path, mock_flag):
+        arch = e["architecture"]
+        if arch in ("ktmicro_dsp", "fiio_dsp", "ktmicro_31b2_oem"):
+            from dac_peq.ktmicro_hid import KTMicroDSPDevice
+            return KTMicroDSPDevice(vid, pid, dev_path, mock_flag)
+        if arch == "moondrop_dsp":
+            from dac_peq.moondrop import MoondropFreeDSPDevice
+            return MoondropFreeDSPDevice(vid, pid, dev_path, mock_flag)
+        if arch == "walkplay_dsp":
+            from dac_peq.walkplay_hid import WalkPlayDSPDevice
+            return WalkPlayDSPDevice(vid, pid, dev_path, mock_flag)
+        raise safety.DeviceSecurityException(
+            f"SAFETY GUARD: {e['name']} (0x{vid or 0:04X}:0x{pid or 0:04X}) has no confirmed DSP protocol "
+            f"in the device table (architecture: {arch}), so writes are refused. "
+            "Use host-side DSP exporters (export-pipewire, export-apo)."
+        )
+
+    # Auto-discovery when no VID/PID is given and not in mock mode
     if vendor_id is None and product_id is None and not use_mock and hid is not None:
         try:
-            walkplay_pids = {0xC20F, 0x43CC, 0x4362, 0x431D, 0x4307, 0x4353}
             for item in hid.enumerate():
                 vid = item.get("vendor_id", 0)
                 pid = item.get("product_id", 0)
-                prod = str(item.get("product_string", "")).lower()
-
-                # Safety guard: skip Conexant CX31993
-                if vid == 0x0572 or (vid == 0x3302 and pid == 0x3365) or "cx31993" in prod:
+                e = safety.match_device(table, vid, pid, str(item.get("product_string", "")))
+                if e is None or e["architecture"] in safety.BLOCKED_ARCHITECTURES:
                     continue
-
-                # Check Moondrop FreeDSP
-                if vid == 0x31B2 and pid == 0x0112:
-                    from dac_peq.moondrop import MoondropFreeDSPDevice
-                    return MoondropFreeDSPDevice(vid, pid, path=item.get("path"), use_mock=False)
-
-                # Check WalkPlay devices
-                if vid == 0x3302 and pid in walkplay_pids:
-                    from dac_peq.walkplay_hid import WalkPlayDSPDevice
-                    return WalkPlayDSPDevice(vid, pid, path=item.get("path"), use_mock=False)
-
-                # Check KTMicro devices (Kiwi Ears Allegro Mini, FiiO JA11, JM12, etc.)
-                if vid in (0x31B2, 0x2972, 0x1908):
-                    from dac_peq.ktmicro_hid import KTMicroDSPDevice
-                    return KTMicroDSPDevice(vid, pid, path=item.get("path"), use_mock=False)
+                return driver_for(e, vid, pid, item.get("path"), False)
+        except ValueError:
+            raise
         except Exception:
             pass
 
-    # Explicit or fallback routing based on VID/PID
-    if vendor_id == 0x31B2 and product_id == 0x0112:
-        from dac_peq.moondrop import MoondropFreeDSPDevice
-        return MoondropFreeDSPDevice(vendor_id, product_id, path, use_mock)
+    if entry is None and use_mock:
+        # Mock mode has no hardware to protect: resolve it to a table entry, never an invented one.
+        entry = table["devices"][0]
 
-    walkplay_pids = (0xC20F, 0x43CC, 0x4362, 0x431D, 0x4307, 0x4353)
-    if vendor_id == 0x3302 and product_id in walkplay_pids:
-        from dac_peq.walkplay_hid import WalkPlayDSPDevice
-        return WalkPlayDSPDevice(vendor_id, product_id, path, use_mock)
+    if entry is None:
+        raise safety.DeviceSecurityException(
+            f"SAFETY GUARD: cannot confirm the identity of 0x{vendor_id or 0:04X}:0x{product_id or 0:04X} - "
+            "it is not in the device table, so writes are refused. "
+            "Use host-side DSP exporters (export-pipewire, export-apo)."
+        )
 
-    from dac_peq.ktmicro_hid import KTMicroDSPDevice
-    return KTMicroDSPDevice(vendor_id, product_id, path, use_mock)
+    return driver_for(entry, vendor_id, product_id, path, use_mock)
