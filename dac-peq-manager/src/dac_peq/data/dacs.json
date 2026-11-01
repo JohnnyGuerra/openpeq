@@ -54,7 +54,7 @@
     "output_power": "30mW @ 32Ω",
     "outputs": ["3.5mm SE"],
     "trrs_mic": true,
-    "recommendation": "Crinacle $9.99 dongle featuring 8-band hardware PEQ and WalkPlay Scheme 11 protocol. Confirmed in the wild by demomanca.",
+    "recommendation": "Crinacle $9.99 dongle featuring 8-band hardware PEQ. Physically tested and verified working on real hardware by demomanca.",
     "quirks": ["walkplay_scheme11", "8_bands"]
   },
   {
@@ -74,7 +74,7 @@
     "output_power": "140mW @ 32Ω (BAL)",
     "outputs": ["3.5mm SE", "4.4mm BAL"],
     "trrs_mic": true,
-    "recommendation": "Crinacle flagship dongle featuring 10-band hardware PEQ and WalkPlay Scheme 16 protocol. Confirmed in the wild by demomanca.",
+    "recommendation": "Crinacle flagship dongle featuring 10-band hardware PEQ. Physically tested and verified working on real hardware by demomanca.",
     "quirks": ["walkplay_scheme16", "10_bands"]
   },
   {

@@ -25,6 +25,8 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **FreeDSP / May Cable** | Moondrop | Moondrop Custom 9-Band DSP | `0x31B2:0x0112` | 9 Bands | Slot 1 | 🟢 | 0.78mm 2-pin modular Type-C cable. 9-band hardware biquad with live readback. |
 | **BmasterX 6 Plug** | BASN | OEM KTMicro / WalkPlay DSP | `0x31B2:0x0111` | 5 Bands | Slot 3 (Custom) | 🟢 | Modular Type-C termination for BASN 1DD+3BA+2PZT Tribrid IEM. |
 | **Wan'er S.G II Red Lion** | TANGZU | KTMicro KT02H20 | `0x31B2:0x0111` | 5 Bands | Slot 3 | 🟢 | Confirmed working in the wild by r/chifi community tester demomanca. 0.78mm 2-pin Type-C cable with onboard KT02H20 hardware PEQ. |
+| **Protocol Micro** | CrinEar | WalkPlay CB1300D (Scheme 11) | `0x3302:0xC20F` | 8 Bands | Slot 101 | 🟢 | Crinacle $9.99 ultra-budget dongle with 8-band hardware PEQ. Physically tested and verified on hardware by community tester demomanca. Native Web Flasher & CLI support complete with 2-way readback and NVRAM commit. |
+| **Protocol Max** | CrinEar | WalkPlay CB1300D (Scheme 16) | `0x3302:0x43CC` | 10 Bands | Slot 101 | 🟢 | Crinacle flagship dongle with 10-band hardware PEQ (3.5mm SE + 4.4mm BAL). Physically tested and verified on hardware by community tester demomanca. Native Web Flasher & CLI support complete with 2-way readback and NVRAM commit. |
 | **JadeAudio JA11** | FiiO / JadeAudio | KTMicro KT02H20 | `0x2972:0x0102` | 5 Bands | Slot 3 | 🟡 | 3.5mm SE dongle with FIR filter selection (FAST-LL, SLOW, NON-OS). Firmware v1.8+ uses native clocking. |
 | **JM12** | JCALLY | KTMicro KT02H20 | `0x31B2:0x0111` | 5 Bands | Slot 3 | 🟡 | Budget 3.5mm SE dongle. Protocol identical to Allegro Mini. |
 | **Allegro Pro** | Kiwi Ears | KTMicro KT_3016L | `0x31B2:0x3016` | 5 Bands | Slot 3 | 🟡 | Dual 3.5mm + 4.4mm balanced high-output dongle. Register layout mapped. |
@@ -41,8 +43,6 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **SPACE Pro** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0x4307` | 10 Bands | Multi | 🟢 | Dual CS43131 flagship dongle with 10-band hardware PEQ (WalkPlay Scheme 15). PID confirmed on physical Linux hardware. 2-way readback and permanent NVRAM flashing fully verified in the wild by community tester Toast (confirmed compatible with official Tanchjim mobile app). |
 | **STARGATE II** | Tanchjim | Cirrus CS43131 + WalkPlay | `0x3302:0x4353` | 8 Bands | Multi | 🟡 | CS43131 dongle using WalkPlay Scheme 15 framing. Protocol implemented. |
 | **DSP Cable - Memory**| ddHiFi | WalkPlay Scheme 15 DSP | `0x3302` | 8 Bands | Preset 1-4 | 🔵 | Audiophile MMCX / 0.78mm 2-pin Type-C DSP cable. |
-| **Protocol Micro** | CrinEar | WalkPlay CB1300D (Scheme 11) | `0x3302:0xC20F` | 8 Bands | Slot 101 | 🟡 | Crinacle $9.99 ultra-budget dongle with 8-band hardware PEQ. WalkPlay Scheme 11 protocol framing and 96kHz Q2.30 biquad arithmetic reverse-engineered from WebHID traces provided by `@demomanca`. Native Web Flasher & CLI support ready. |
-| **Protocol Max** | CrinEar | WalkPlay CB1300D (Scheme 16) | `0x3302:0x43CC` | 10 Bands | Slot 101 | 🟡 | Crinacle flagship dongle with 10-band hardware PEQ (3.5mm SE + 4.4mm BAL). WalkPlay Scheme 16 protocol framing reverse-engineered from WebHID traces provided by `@demomanca`. Native Web Flasher & CLI support ready. |
 | **KA15** | FiiO | Dual CS43198 + SGM8262 | `0x2972:0x0104` | 10 Bands | USER1-3 | 🔵 | 560mW Desktop Mode dongle with color LCD retro cassette display. FiiO framed protocol. |
 
 ---

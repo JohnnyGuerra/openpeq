@@ -68,8 +68,8 @@ See **[COMPATIBILITY.md](./COMPATIBILITY.md)** for our full breakdown of all **3
 
 | Status | Category | Highlighted Devices |
 | :---: | :--- | :--- |
-| 🟢 | **Hardware Verified & Tested** | **Tanchjim SPACE Pro**, **Kiwi Ears Allegro Mini**, **Moondrop FreeDSP / May Cable**, **TANGZU Wan'er S.G II Cable**, **BASN BmasterX 6 Plug**, **TTGK CX31993**, **Rythflo WD01**, **Bluetrum AB13X** |
-| 🟡 | **Protocol Implemented (Awaiting Silicon Tester)** | **TRUTHEAR KEYX**, **CrinEar Protocol Micro & Max**, **Moondrop Chu II DSP**, **Tanchjim ONE DSP**, **FiiO / JadeAudio JA11**, **Fosi Audio DS3**, **FiiO LS-TC2**, **Celest Wyvern Abyss**, **Simgot EW300 DSP** |
+| 🟢 | **Hardware Verified & Tested** | **CrinEar Protocol Micro & Max**, **Tanchjim SPACE Pro**, **Kiwi Ears Allegro Mini**, **Moondrop FreeDSP / May Cable**, **TANGZU Wan'er S.G II Cable**, **BASN BmasterX 6 Plug**, **TTGK CX31993**, **Rythflo WD01**, **Bluetrum AB13X** |
+| 🟡 | **Protocol Implemented (Awaiting Silicon Tester)** | **TRUTHEAR KEYX**, **Moondrop Chu II DSP**, **Tanchjim ONE DSP**, **FiiO / JadeAudio JA11**, **Fosi Audio DS3**, **FiiO LS-TC2**, **Celest Wyvern Abyss**, **Simgot EW300 DSP** |
 | 🔵 | **Protocol In Development (Help Wanted)** | **FiiO KA15**, **FiiO KA17**, **FiiO BTR13**, **ddHiFi Memory DSP** |
 | 🔴 | **Fixed Mask ROM (Host DSP & Qudelix Interop)** | **Qudelix-5K Profile Sync**, **Conexant CX31993 (TTGK, JCALLY JM6 Pro)**, **Apple USB-C A2049**, **Moondrop Dawn Pro** |
 
