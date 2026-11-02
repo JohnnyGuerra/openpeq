@@ -30,7 +30,8 @@ jobs:
 
       - name: Materialise the device table
         # web/dacs.json is a symlink to the shared table; Pages serves regular files only.
-        run: cp -L dac-peq-manager/src/dac_peq/data/dacs.json dac-peq-manager/web/dacs.json
+        # --remove-destination: without it cp resolves the destination symlink and reports "same file".
+        run: cp -L --remove-destination dac-peq-manager/src/dac_peq/data/dacs.json dac-peq-manager/web/dacs.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
