@@ -13,6 +13,9 @@ pub enum DacError {
 
     #[error("Device Communication Error: {0}")]
     Communication(String),
+
+    #[error("Preset Parse Error: {0}")]
+    Parse(String),
 }
 
 pub type Result<T> = std::result::Result<T, DacError>;

@@ -14,6 +14,7 @@ A curated inventory of In-Ear Monitors (IEMs), DAC dongles, cable configurations
 | **Kiwi Ears Cadenza** | 10mm Beryllium-Coated Diaphragm (1DD) | **0.78mm 2-Pin** | **Warm Harman & Lush**: Smooth beryllium transients, punchy mid-bass warmth, natural vocal timbre, and non-fatiguing treble roll-off. An everyday musical all-rounder. | [`kiwi-ears-cadenza.json`](file:///home/ubuntu/iem/dac-peq-manager/presets/kiwi-ears-cadenza.json) (`cadenza`) |
 | **Simgot EW300** | Tribrid: 1DD (Ceramic-PZT) + 1 Planar + 1 PZT | **0.78mm 2-Pin** | **Technical & Dynamic**: Rapid planar speed with dynamic slam. Swappable tuning nozzles: Silver (Harman target clarity) vs Gold (balanced warm-neutral). | [`ew300_silver.json`](file:///home/ubuntu/iem/dac-peq-manager/presets/ew300_silver.json) & [`ew300_gold.json`](file:///home/ubuntu/iem/dac-peq-manager/presets/ew300_gold.json) |
 | **BASN BmasterX 6** | 6-Driver Tribrid: 1DD + 3BA + 2PZT | **MMCX** | **High-Energy Basshead & Stage Monitor**: Monstrous sub-bass impact from dedicated DD, combined with micro-detail from triple balanced armatures and dual piezoelectric super-tweeters. | [`bmasterx6.json`](file:///home/ubuntu/iem/dac-peq-manager/presets/bmasterx6.json) (`bmasterx6`) |
+| **Moondrop Chu II** | 10mm Al-Mg Alloy Dome Dynamic Driver (1DD) | **0.78mm 2-Pin** | **VDSF / Balanced Warm-Neutral**: Punchy sub-bass extension, smooth vocal presence, and swappable brass acoustic nozzles. Outstanding budget benchmark. | [`chu2.json`](file:///home/ubuntu/iem/dac-peq-manager/presets/chu2.json) (`chu2`) |
 
 ---
 
@@ -56,17 +57,20 @@ dac-peq flash ief_neutral
 # 3. Tangzu Wan'er S.G II
 dac-peq flash tangzu-waner
 
-# 3. Kiwi Ears Cadenza
+# 4. Kiwi Ears Cadenza
 dac-peq flash cadenza
 
-# 4. Simgot EW300 (Silver Nozzle)
+# 5. Simgot EW300 (Silver Nozzle)
 dac-peq flash ew300_silver
 
-# 5. Simgot EW300 (Gold Nozzle)
+# 6. Simgot EW300 (Gold Nozzle)
 dac-peq flash ew300_gold
 
-# 6. BASN BmasterX 6
+# 7. BASN BmasterX 6
 dac-peq flash bmasterx6
+
+# 8. Moondrop Chu II
+dac-peq flash chu2
 
 # Export any profile for PipeWire / Wavelet / EqualizerAPO
 dac-peq export-pipewire zero2 -o zero2_sink.conf

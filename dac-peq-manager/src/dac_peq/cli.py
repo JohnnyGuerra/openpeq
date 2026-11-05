@@ -40,6 +40,7 @@ from dac_peq.database import AutoEqDatabase, DatabaseEntry
 from dac_peq.exporters import (
     DEFAULT_CX31993_SINK,
     export_apo_suite,
+    export_equalizer314,
     export_pipewire_conf,
     export_qudelix,
     format_pipewire_filter_chain,
@@ -714,6 +715,35 @@ def cmd_export_apo(
             "[dim]EqualizerAPO: Import or Include in config.txt on Windows.\n"
             "Wavelet (Android): Import the GraphicEQ.txt via AutoEq -> Import in Wavelet.[/dim]",
             title="Universal Host DSP Exporter",
+            border_style="green",
+        )
+    )
+
+
+@app.command("export-equalizer314")
+def cmd_export_equalizer314(
+    preset_name: str = typer.Argument(..., help="Preset name or JSON file path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Custom output file path (.txt)"),
+    output_dir: str = typer.Option("./exports", "--output-dir", help="Directory to save export file"),
+    full_target: bool = typer.Option(False, "--full-target", "--10-band", help="Export full 10-band target profile instead of decimated hardware profile"),
+    auto_preamp: bool = typer.Option(False, "--auto-preamp", help="Automatically calculate negative pre-amp to prevent clipping"),
+):
+    """Generate Equalizer314-compatible EqualizerAPO .txt configuration for Android system-wide DynamicsProcessing."""
+    preset = load_preset_data(preset_name)
+    if full_target and preset.get("full_bands") and len(preset.get("full_bands")) > 5:
+        preset = dict(preset)
+        preset["bands"] = preset["full_bands"]
+        console.print(f"[cyan]Exporting full-fidelity target profile ({len(preset['bands'])} bands).[/cyan]")
+
+    out_file = export_equalizer314(preset, output_path=output, output_dir=output_dir, auto_preamp=auto_preamp)
+
+    console.print(
+        Panel(
+            f"[bold green]Equalizer314 Profile Generated:[/bold green] [bold cyan]{out_file}[/bold cyan]\n"
+            f"Preset: [bold]{preset.get('name')}[/bold] ({len(preset.get('bands', []))} Bands)\n"
+            f"Auto Anti-Clipping Guard: [{'green' if auto_preamp else 'dim'}]{'ENABLED' if auto_preamp else 'DISABLED'}[/]\n\n"
+            "[dim]Equalizer314 (Android): Open Equalizer314 -> Presets -> Import -> Select this file.[/dim]",
+            title="Equalizer314 FOSS Android DSP Exporter",
             border_style="green",
         )
     )

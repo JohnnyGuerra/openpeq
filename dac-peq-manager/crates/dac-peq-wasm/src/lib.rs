@@ -255,6 +255,49 @@ pub fn export_wavelet_txt(preset_json: &str) -> std::result::Result<String, JsVa
     Ok(format_wavelet_graphiceq(&preset))
 }
 
+#[wasm_bindgen]
+pub fn export_equalizer314_txt(preset_json: &str) -> std::result::Result<String, JsValue> {
+    let preset: PeqPreset = serde_json::from_str(preset_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid preset JSON: {e}")))?;
+    Ok(dac_peq_core::exporters::equalizer314::format_equalizer314_export(&preset))
+}
+
+#[wasm_bindgen]
+pub fn parse_any_preset_to_json(input_text: &str) -> std::result::Result<String, JsValue> {
+    let parsed = dac_peq_core::parser::parse_preset_permissive(input_text)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let preset = parsed.to_peq_preset();
+    serde_json::to_string(&preset)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {e}")))
+}
+
+#[wasm_bindgen]
+pub fn fit_measurement_to_target_json(
+    measurement_text: &str,
+    target_name: &str,
+    target_bands: usize,
+    anchor_shelves: Option<bool>,
+    fs: Option<f64>,
+) -> std::result::Result<String, JsValue> {
+    let target = match target_name.to_ascii_lowercase().as_str() {
+        "harman" | "harman_ie_2019" | "harman_2019" => dac_peq_core::fitter::StandardTarget::HarmanInEar2019,
+        "ief" | "ief_neutral" => dac_peq_core::fitter::StandardTarget::IefNeutral,
+        "jm1" | "jm_1" | "diffuse" | "diffuse_field_tilted" => dac_peq_core::fitter::StandardTarget::DiffuseFieldTilted,
+        _ => dac_peq_core::fitter::StandardTarget::HarmanInEar2019,
+    };
+
+    let preset = dac_peq_core::fitter::fit_measurement_to_target(
+        measurement_text,
+        target,
+        target_bands,
+        anchor_shelves.unwrap_or(true),
+        fs.unwrap_or(48000.0),
+    ).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    serde_json::to_string(&preset)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {e}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

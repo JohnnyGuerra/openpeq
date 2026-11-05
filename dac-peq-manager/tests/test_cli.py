@@ -13,7 +13,7 @@ def test_cli_help():
     res = runner.invoke(app, ["--help"])
     assert res.exit_code == 0
     assert "Hardware DSP Flasher & Host PEQ Suite" in res.output
-    for cmd in ["scan", "apply", "flash", "read", "filter", "export-pipewire", "export-apo", "udev", "plot"]:
+    for cmd in ["scan", "apply", "flash", "read", "filter", "export-pipewire", "export-apo", "export-equalizer314", "udev", "plot"]:
         assert cmd in res.output
 
 
@@ -89,6 +89,18 @@ def test_cli_export_apo(tmp_path: Path):
     assert (tmp_path / "ew300_silver_equalizer_apo.txt").is_file()
     assert (tmp_path / "ew300_silver_wavelet_graphiceq.txt").is_file()
     assert (tmp_path / "ew300_silver_wavelet.json").is_file()
+
+
+def test_cli_export_equalizer314(tmp_path: Path):
+    """Verify Equalizer314 Android profile export via CLI."""
+    out_file = tmp_path / "custom_equalizer314.txt"
+    res = runner.invoke(app, ["export-equalizer314", "bmasterx6", "-o", str(out_file)])
+    assert res.exit_code == 0
+    assert "Equalizer314 Profile Generated" in res.output
+    assert out_file.is_file()
+    content = out_file.read_text(encoding="utf-8")
+    assert "Filter 1: ON LSC" in content
+    assert "Preamp:" in content
 
 
 def test_cli_udev_print():

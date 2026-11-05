@@ -5,7 +5,7 @@
 
 import { computeCompositeCurve, generateLogFrequencies } from "./biquad_math.js";
 import { loadTable } from "./safety_guard.js";
-import { formatPipeWireConf, formatEqualizerApo } from "./exporters.js";
+import { formatPipeWireConf, formatEqualizerApo, formatEqualizer314 } from "./exporters.js";
 
 let wasmModule = null;
 let wasmReady = false;
@@ -142,4 +142,44 @@ export function generateApoConfigWasm(preset) {
     }
   }
   return generateApoConfig(preset, LOG_FREQS);
+}
+
+export function parseAnyPresetWasm(text) {
+  const mod = getWasmEngine();
+  if (mod && typeof mod.parse_any_preset_to_json === "function") {
+    try {
+      const jsonStr = mod.parse_any_preset_to_json(text);
+      return JSON.parse(jsonStr);
+    } catch (err) {
+      console.warn("[WASM Engine] parse_any_preset_to_json error:", err);
+    }
+  }
+  return null;
+}
+
+export function fitMeasurementToTargetWasm(measurementText, targetName = "harman", targetBands = 5, anchorShelves = true, fs = 48000) {
+  const mod = getWasmEngine();
+  if (mod && typeof mod.fit_measurement_to_target_json === "function") {
+    try {
+      const jsonStr = mod.fit_measurement_to_target_json(measurementText, targetName, targetBands, anchorShelves, fs);
+      return JSON.parse(jsonStr);
+    } catch (err) {
+      console.warn("[WASM Engine] fit_measurement_to_target_json error:", err);
+      throw err;
+    }
+  }
+  throw new Error("WASM Engine not ready or fit_measurement_to_target_json unsupported.");
+}
+
+export function generateEqualizer314ConfigWasm(preset) {
+  const mod = getWasmEngine();
+  if (mod && typeof mod.export_equalizer314_txt === "function") {
+    try {
+      return mod.export_equalizer314_txt(JSON.stringify(preset));
+    } catch (err) {
+      console.warn("[WASM Engine] export_equalizer314_txt error:", err);
+    }
+  }
+  const bands = Array.isArray(preset) ? preset : (preset?.bands || []);
+  return formatEqualizer314(preset || {}, bands);
 }

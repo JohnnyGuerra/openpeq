@@ -365,5 +365,26 @@ def test_exporters_disabled_bands():
     assert decoded["bands"][1]["gain"] == 2.5
 
 
+def test_format_equalizer314():
+    from dac_peq.exporters import format_equalizer314
+    preset = {
+        "name": "Kato Equalizer314 Test",
+        "description": "Android dynamic processing profile",
+        "preamp": -3.2,
+        "bands": [
+            {"index": 1, "type": "LSQ", "freq": 80.0, "gain": 4.5, "q": 0.71, "enabled": True},
+            {"index": 2, "type": "PK", "freq": 3000.0, "gain": -1.5, "q": 2.0, "enabled": True},
+            {"index": 3, "type": "HSQ", "freq": 10000.0, "gain": 2.0, "q": 0.71, "enabled": False},
+        ],
+    }
+    out = format_equalizer314(preset)
+    assert "# Equalizer314 Configuration" in out
+    assert "Preamp: -3.20 dB" in out
+    assert "Filter 1: ON LSC Fc 80.0 Hz Gain +4.50 dB Q 0.71" in out
+    assert "Filter 2: ON PK Fc 3000.0 Hz Gain -1.50 dB Q 2.00" in out
+    assert "Filter 3: OFF HSC Fc 10000.0 Hz Gain +0.00 dB Q 0.71" in out
+
+
+
 
 

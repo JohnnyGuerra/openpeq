@@ -24,6 +24,7 @@ import { BLOCKED_ARCHITECTURES, entryFor, guardWrite, loadTable, matchDevice, se
 import {
   formatPipeWireConf,
   formatEqualizerApo,
+  formatEqualizer314,
   formatWaveletGraphicEq,
   formatQudelixJson,
   parseParametricEq,
@@ -65,6 +66,9 @@ import {
   isWasmReady,
   getWasmEngine,
   computeCompositeResponseWasm,
+  parseAnyPresetWasm,
+  fitMeasurementToTargetWasm,
+  generateEqualizer314ConfigWasm,
   wasm,
 } from "./modules/wasm_engine.js";
 
@@ -1642,6 +1646,14 @@ function exportEqualizerApo() {
   showToast(`Downloaded EqualizerAPO profile (${bands.length} bands)!`);
 }
 
+function exportEqualizer314Profile() {
+  const preset = currentPreset;
+  const { bands, tag, isFull } = getBandsForExport();
+  const txt = formatEqualizer314(preset, bands, isFull);
+  downloadFile(`${preset.slug || "preset"}_${tag}_equalizer314.txt`, txt);
+  showToast(`Downloaded Equalizer314 Android profile (${bands.length} bands)!`);
+}
+
 function exportWaveletGraphicEq() {
   const { bands, tag } = getBandsForExport();
   const txt = formatWaveletGraphicEq(bands, currentPreset.preamp, 127);
@@ -2552,12 +2564,40 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!file) return;
     try {
       const text = await file.text();
-      let parsed;
+      let parsed = null;
+
+      // 1. Try WASM multi-format preset parser (Poweramp JSON, GraphicEQ, EqualizerAPO, Wavelet)
       try {
-        parsed = JSON.parse(text);
-      } catch (jsonErr) {
-        // Fall back to GraphWorks / Equalizer APO / Peace / CSV parser
-        parsed = parseParametricEq(text, file.name.replace(/\.[^/.]+$/, ""));
+        const wasmRes = parseAnyPresetWasm(text);
+        if (wasmRes && wasmRes.bands && wasmRes.bands.length > 0) {
+          parsed = wasmRes;
+        }
+      } catch (err) {
+        console.warn("WASM parseAnyPreset failed, attempting fallback:", err);
+      }
+
+      // 2. If not parsed, check if it is a raw frequency response measurement (Squiglink/REW CSV/TXT)
+      if (!parsed) {
+        try {
+          const fitted = fitMeasurementToTargetWasm(text, "harman", activeHardwareBands, true);
+          if (fitted && fitted.bands && fitted.bands.length > 0) {
+            fitted.name = file.name.replace(/\.[^/.]+$/, "") + " (Harman Fitted)";
+            parsed = fitted;
+            showToast(`✨ AutoEQ fitted raw measurement to Harman target into ${activeHardwareBands} hardware biquads!`);
+          }
+        } catch (fitErr) {
+          // not a raw measurement file
+        }
+      }
+
+      // 3. Fallback to existing JSON / parametric eq parser
+      if (!parsed) {
+        try {
+          parsed = JSON.parse(text);
+        } catch (jsonErr) {
+          // Fall back to GraphWorks / Equalizer APO / Peace / CSV parser
+          parsed = parseParametricEq(text, file.name.replace(/\.[^/.]+$/, ""));
+        }
       }
       loadPresetObject(parsed, file.name.replace(/\.[^/.]+$/, ""));
       if (parsed.slot_id) {
@@ -2605,6 +2645,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnExportPw")?.addEventListener("click", exportPipeWireConf);
   document.getElementById("btnExportApo")?.addEventListener("click", exportEqualizerApo);
   document.getElementById("btnExportWavelet")?.addEventListener("click", exportWaveletGraphicEq);
+  document.getElementById("btnExportEqualizer314")?.addEventListener("click", exportEqualizer314Profile);
   document.getElementById("btnExportQudelix")?.addEventListener("click", exportQudelixProfile);
 
   document.getElementById("btnTestNoise")?.addEventListener("click", toggleTestNoise);

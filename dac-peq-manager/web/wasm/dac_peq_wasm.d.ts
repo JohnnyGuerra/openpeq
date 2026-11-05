@@ -31,13 +31,21 @@ export function encode_walkplay_payload(preset_json: string, slot_id: number, co
 
 export function export_apo_txt(preset_json: string): string;
 
+export function export_equalizer314_txt(preset_json: string): string;
+
 export function export_pipewire_conf(preset_json: string, sink_target?: string | null): string;
 
 export function export_wavelet_txt(preset_json: string): string;
 
+export function fit_measurement_to_target_json(measurement_text: string, target_name: string, target_bands: number, anchor_shelves?: boolean | null, fs?: number | null): string;
+
 export function generate_apo_config(preset_json: string): string;
 
 export function generate_pipewire_config(preset_json: string, sink_target?: string | null): string;
+
+export function parse_any_preset_to_json(input_text: string): string;
+
+export function set_device_table(json: string): string;
 
 export function wasm_version(): string;
 
@@ -60,10 +68,14 @@ export interface InitOutput {
     readonly encode_nvram_commit_report: () => any;
     readonly encode_walkplay_payload: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly export_apo_txt: (a: number, b: number) => [number, number, number, number];
+    readonly export_equalizer314_txt: (a: number, b: number) => [number, number, number, number];
     readonly export_pipewire_conf: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly export_wavelet_txt: (a: number, b: number) => [number, number, number, number];
+    readonly fit_measurement_to_target_json: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly generate_apo_config: (a: number, b: number) => [number, number, number, number];
     readonly generate_pipewire_config: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly parse_any_preset_to_json: (a: number, b: number) => [number, number, number, number];
+    readonly set_device_table: (a: number, b: number) => [number, number, number, number];
     readonly wasm_version: () => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

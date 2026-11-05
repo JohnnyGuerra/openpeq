@@ -16,10 +16,14 @@ export const encode_moondrop_payload: (a: number, b: number, c: number) => [numb
 export const encode_nvram_commit_report: () => any;
 export const encode_walkplay_payload: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const export_apo_txt: (a: number, b: number) => [number, number, number, number];
+export const export_equalizer314_txt: (a: number, b: number) => [number, number, number, number];
 export const export_pipewire_conf: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const export_wavelet_txt: (a: number, b: number) => [number, number, number, number];
+export const fit_measurement_to_target_json: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const generate_apo_config: (a: number, b: number) => [number, number, number, number];
 export const generate_pipewire_config: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const parse_any_preset_to_json: (a: number, b: number) => [number, number, number, number];
+export const set_device_table: (a: number, b: number) => [number, number, number, number];
 export const wasm_version: () => [number, number];
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;

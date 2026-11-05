@@ -33,6 +33,9 @@ Run the full hardware flasher directly in your browser via WebHID (Chrome, Brave
 * Real-time Interactive SVG Biquad Curve with draggable band handles.
 * AutoEq Database Integration (search over 5,000+ headphone & IEM measurements).
 * 2-Way Hardware Readback & Live Audition in RAM before saving to persistent NVRAM.
+* Universal Multi-Format Preset Ingestion: Drag-and-drop Poweramp Equalizer JSON, Wavelet, AutoEQ `GraphicEQ:`, or EqualizerAPO files directly.
+* Client-Side AutoEq Filter Synthesis: Fit raw frequency response measurements (.csv/.txt from squig.link) to Harman In-Ear 2019, IEF Neutral, or custom target curves directly in browser RAM via WebAssembly.
+* Equalizer314 & Host Exporters: Software fallback configurations for fixed-function chips (PipeWire, EqualizerAPO, Wavelet, Equalizer314).
 * Built-in Safety Guardrails: NVRAM Flash Wear-Out Tracker & Conexant fixed mask ROM protection.
 
 > [!TIP]
@@ -127,6 +130,7 @@ openpeq flash-history
 # Export 10-band target profile for software equalizers
 openpeq export-pipewire bmasterx6 --full-target
 openpeq export-apo bmasterx6 --full-target
+openpeq export-equalizer314 bmasterx6 --full-target
 ```
 
 ---
