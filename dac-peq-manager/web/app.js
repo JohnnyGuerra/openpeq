@@ -19,7 +19,7 @@ import {
   smoothCouplerBiquads,
 } from "./modules/biquad_math.js";
 
-import { BLOCKED_ARCHITECTURES, entryFor, guardWrite, loadTable, matchDevice, setTable } from "./modules/safety_guard.js";
+import { BLOCKED_ARCHITECTURES, entryFor, getTable, guardWrite, loadTable, matchDevice, setTable } from "./modules/safety_guard.js";
 
 import {
   formatPipeWireConf,
@@ -1039,7 +1039,9 @@ async function applyToDevice(commitFlash = false) {
     // Branch 1: WalkPlay Scheme 11 (8-Band) & Scheme 16 (10-Band) Protocol
     if (activeHardwareBands === 8 || activeHardwareBands === 10 || isWalkplayDsp(connectedHidDevice)) {
       const bandCount = activeHardwareBands;
-      const slot = 101; // Walkplay default user preset slot
+      const isScheme15 = Boolean(connectedDeviceProfile?.quirks?.includes("walkplay_scheme15")) ||
+        [0x4307, 0x431D, 0x4353, 0x4362, 0x5452].includes(connectedHidDevice?.productId);
+      const slot = isScheme15 ? 1 : 101;
       for (let i = 0; i < bandCount; i++) {
         const b = currentPreset.bands[i] || { type: "PK", freq: 1000, gain: 0, q: 1.0 };
         const effGain = b.enabled === false ? 0.0 : b.gain;
@@ -2145,7 +2147,28 @@ const DEFAULT_DACS = [
     output_power: "20mW @ 32Ω",
     recommendation: "100W PD charging splitter. 16-bit/48kHz fixed codec. No hardware PEQ flash. Use host DSP.",
   },
+  {
+    id: "tanchjim_stargate_ii",
+    name: "Tanchjim STARGATE II",
+    brand: "Tanchjim",
+    chipset: "Dual Cirrus Logic CS43131 + WalkPlay DSP",
+    architecture: "walkplay_dsp",
+    dac_type: "hardware_dsp",
+    flashable: true,
+    hardware_bands: 8,
+    vid: 3034, pid: 21586,
+    resolution: "32-bit / 384 kHz, DSD256",
+    output_power: "125mW @ 32Ω",
+    recommendation: "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15 / Realtek bridge).",
+  },
 ];
+
+// Initialize catalog from safety guard table if already available in Node
+const _nodeTable = typeof getTable === "function" ? getTable() : null;
+if (_nodeTable?.devices) {
+  dacCatalog = _nodeTable.devices;
+  guardTable = _nodeTable;
+}
 
 async function loadDacDatabase() {
   dacCatalog = DEFAULT_DACS;
@@ -2193,8 +2216,7 @@ export function findDacInDatabase(vid, pid, prodName = "") {
     for (const d of catalog) {
       if (d.vid === vid) {
         const dName = (d.name || "").toLowerCase();
-        const dBrand = (d.brand || "").toLowerCase();
-        if (pLower.includes(dName) || dName.includes(pLower) || (dBrand && pLower.includes(dBrand))) {
+        if (pLower.includes(dName) || dName.includes(pLower)) {
           return d;
         }
       }

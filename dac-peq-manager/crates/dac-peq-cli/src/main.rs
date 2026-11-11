@@ -300,7 +300,7 @@ fn find_supported_device(
 
         // WalkPlay devices
         let is_walkplay = (vid == 0x3302 && pid != 0x022A && pid != 0x3365)
-            || (vid == 0x0BDA && pid == 0x0023);
+            || (vid == 0x0BDA && (pid == 0x0023 || pid == 0x5452));
 
         if is_walkplay {
             let max_bands = if vid == 0x3302 && (pid == 0x4307 || pid == 0x431D || pid == 0x43CC) {
@@ -501,7 +501,7 @@ fn main() -> Result<()> {
 
                 let is_moondrop = v == 0x31B2 && p_id == 0x0112;
                 let is_wp = (v == 0x3302 && p_id != 0x022A && p_id != 0x3365)
-                    || (v == 0x0BDA && p_id == 0x0023);
+                    || (v == 0x0BDA && (p_id == 0x0023 || p_id == 0x5452));
 
                 if is_moondrop {
                     if p.bands.len() != 9 {
@@ -686,7 +686,7 @@ fn main() -> Result<()> {
 
                 let is_moondrop = v == 0x31B2 && p_id == 0x0112;
                 let is_wp = (v == 0x3302 && p_id != 0x022A && p_id != 0x3365)
-                    || (v == 0x0BDA && p_id == 0x0023);
+                    || (v == 0x0BDA && (p_id == 0x0023 || p_id == 0x5452));
 
                 if is_moondrop {
                     if p.bands.len() != 9 {

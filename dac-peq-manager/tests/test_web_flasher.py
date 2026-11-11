@@ -840,13 +840,17 @@ def test_find_dac_in_database_disambiguation():
     const jcally = findDacInDatabase(12722, 273, "JCALLY JM12");
     const allegro = findDacInDatabase(12722, 273, "Kiwi Ears Allegro Mini");
     const fallback = findDacInDatabase(12722, 273, "Unknown Generic Device");
+    const stargateRealtek = findDacInDatabase(0x0bda, 0x5452, "Tanchjim STARGATE II");
+    const stargateUnmatchedVid = findDacInDatabase(0x3302, 0x5452, "Tanchjim STARGATE II");
 
     console.log(JSON.stringify({
       nullDac,
       basnId: basn?.id,
       jcallyId: jcally?.id,
       allegroId: allegro?.id,
-      fallbackId: fallback?.id
+      fallbackId: fallback?.id,
+      stargateRealtekId: stargateRealtek?.id,
+      stargateUnmatchedVidId: stargateUnmatchedVid?.id || null
     }));
     """
     res = run_node_eval(js_code)
@@ -855,6 +859,9 @@ def test_find_dac_in_database_disambiguation():
     assert res["jcallyId"] == "jcally_jm12"
     assert res["allegroId"] == "allegro_mini"
     assert res["fallbackId"] == "allegro_mini"
+    assert res["stargateRealtekId"] == "tanchjim_stargate_ii"
+    # Crucial: Must never falsely assign Space Pro to a Stargate II
+    assert res["stargateUnmatchedVidId"] != "tanchjim_space_pro"
 
 
 def test_file_input_preset_preserves_disabled_state():

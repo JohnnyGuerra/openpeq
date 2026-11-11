@@ -556,7 +556,7 @@
     {
       "architecture": "walkplay_dsp",
       "brand": "Tanchjim",
-      "chipset": "Cirrus Logic CS43131 + WalkPlay DSP",
+      "chipset": "Dual Cirrus Logic CS43131 + WalkPlay DSP",
       "dac_type": "hardware_dsp",
       "flashable": true,
       "hardware_bands": 8,
@@ -566,18 +566,18 @@
       "outputs": [
         "3.5mm SE"
       ],
-      "pid": 17235,
-      "pid_hex": "0x4353",
+      "pid": 21586,
+      "pid_hex": "0x5452",
       "quirks": [
         "walkplay_scheme15",
         "8_bands",
         "compensate2x"
       ],
-      "recommendation": "Compact CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15).",
+      "recommendation": "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15 / Realtek bridge).",
       "resolution": "32-bit / 384 kHz, DSD256",
       "trrs_mic": true,
-      "vid": 13058,
-      "vid_hex": "0x3302"
+      "vid": 3034,
+      "vid_hex": "0x0BDA"
     },
     {
       "architecture": "walkplay_dsp",

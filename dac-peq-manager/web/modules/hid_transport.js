@@ -7,8 +7,9 @@ import { entryFor } from "./safety_guard.js";
 export const KTMICRO_FILTERS = [
   { vendorId: 0x31b2 }, // KTMicro / Kiwi Ears Allegro Mini / Moondrop FreeDSP
   { vendorId: 0x2972 }, // FiiO JA11
-  { vendorId: 0x3302 }, // KTMicro / Kiwi Ears OEM Type-C DACs
+  { vendorId: 0x3302 }, // KTMicro / Kiwi Ears OEM Type-C DACs / WalkPlay
   { vendorId: 0x0bda, productId: 0x0023 }, // WalkPlay OEM
+  { vendorId: 0x0bda, productId: 0x5452 }, // Tanchjim STARGATE II (Realtek bridge)
   { vendorId: 0x0661 },
   { vendorId: 0x262a },
 ];

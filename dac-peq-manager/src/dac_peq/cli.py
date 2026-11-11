@@ -814,9 +814,11 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1908", MODE="0666", TA
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0a12", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0a12", MODE="0666", TAG+="uaccess"
 
-# WalkPlay Realtek OEM (0x0bda:0x0023)
+# WalkPlay Realtek OEM (0x0bda:0x0023) & Tanchjim STARGATE II (0x0bda:0x5452)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", TAG+="uaccess"
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="0023", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5452", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="5452", MODE="0666", TAG+="uaccess"
 
 # Celest / Kinera (Wyvern Abyss DSP, 0x262a)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="262a", TAG+="uaccess"
