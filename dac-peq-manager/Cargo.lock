@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "dac-peq-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "dac-peq-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "approx",
  "serde",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "dac-peq-wasm"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dac-peq-core",
  "js-sys",
