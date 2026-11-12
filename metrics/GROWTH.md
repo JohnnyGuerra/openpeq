@@ -1,6 +1,6 @@
 # 📊 Growth & Analytics Dashboard: [JohnnyGuerra/openpeq](https://github.com/JohnnyGuerra/openpeq)
 
-> **Last Updated**: `2026-11-11 04:12:27 UTC`  
+> **Last Updated**: `2026-11-12 05:23:50 UTC`  
 > **Archival Status**: Traffic data is permanently retained and preserved beyond GitHub's 14-day deletion limit.
 
 ## 🌟 Repository Overview
@@ -60,7 +60,11 @@
 
 | Release | Asset | Downloads | Size | Published |
 | :--- | :--- | :---: | :---: | :---: |
-| `v0.2.0` | `dac-peq-linux-x86_64` | **0** | 1.41 MB | 2026-10-24 |
-| `v0.2.0` | `dac-peq-macos-arm64` | **1** | 1.24 MB | 2026-10-24 |
-| `v0.2.0` | `dac-peq-macos-x86_64` | **1** | 1.26 MB | 2026-10-24 |
-| `v0.2.0` | `dac-peq-windows-x86_64.exe` | **2** | 0.95 MB | 2026-10-24 |
+| `v0.3.0` | `dac-peq-linux-x86_64` | **1** | 1.66 MB | 2026-11-11 |
+| `v0.3.0` | `dac-peq-macos-arm64` | **1** | 1.47 MB | 2026-11-11 |
+| `v0.3.0` | `dac-peq-macos-x86_64` | **1** | 1.51 MB | 2026-11-11 |
+| `v0.3.0` | `dac-peq-windows-x86_64.exe` | **1** | 1.16 MB | 2026-11-11 |
+| `v0.2.0` | `dac-peq-linux-x86_64` | **1** | 1.41 MB | 2026-10-24 |
+| `v0.2.0` | `dac-peq-macos-arm64` | **2** | 1.24 MB | 2026-10-24 |
+| `v0.2.0` | `dac-peq-macos-x86_64` | **2** | 1.26 MB | 2026-10-24 |
+| `v0.2.0` | `dac-peq-windows-x86_64.exe` | **3** | 0.95 MB | 2026-10-24 |
