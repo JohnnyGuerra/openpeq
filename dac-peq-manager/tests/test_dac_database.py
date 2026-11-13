@@ -50,16 +50,16 @@ def test_dac_database_lookup():
     assert jm12_named.id == "jcally_jm12"
     assert jm12_named.name == "JCALLY JM12"
 
-    # Tanchjim STARGATE II (0x0BDA:0x5452 & 0x3302:0x5452)
-    stargate_realtek = db.lookup(0x0BDA, 0x5452)
-    assert stargate_realtek is not None
-    assert stargate_realtek.name == "Tanchjim STARGATE II"
-    assert stargate_realtek.architecture == "walkplay_dsp"
-    assert stargate_realtek.hardware_bands == 8
-    assert stargate_realtek.id == "tanchjim_stargate_ii"
+    # Tanchjim STARGATE II (0x3302:0xF3D4 confirmed hardware VID/PID)
+    stargate = db.lookup(0x3302, 0xF3D4)
+    assert stargate is not None
+    assert stargate.name == "Tanchjim STARGATE II"
+    assert stargate.architecture == "walkplay_dsp"
+    assert stargate.hardware_bands == 8
+    assert stargate.id == "tanchjim_stargate_ii"
 
     # Ensure Stargate product name never accidentally maps to Space Pro
-    stargate_named = db.lookup(0x0BDA, 0x5452, product_name="Tanchjim Stargate II")
+    stargate_named = db.lookup(0x3302, 0xF3D4, product_name="Tanchjim Stargate II")
     assert stargate_named is not None
     assert stargate_named.id == "tanchjim_stargate_ii"
     assert stargate_named.id != "tanchjim_space_pro"

@@ -1044,7 +1044,7 @@ async function applyToDevice(commitFlash = false) {
     if (activeHardwareBands === 8 || activeHardwareBands === 10 || isWalkplayDsp(connectedHidDevice)) {
       const bandCount = activeHardwareBands;
       const isScheme15 = Boolean(connectedDeviceProfile?.quirks?.includes("walkplay_scheme15")) ||
-        [0x4307, 0x431D, 0x4353, 0x4362, 0x5452].includes(connectedHidDevice?.productId);
+        [0x4307, 0x431D, 0x4353, 0x4362, 0x5452, 0xF3D4].includes(connectedHidDevice?.productId);
       const slot = isScheme15 ? 1 : 101;
       for (let i = 0; i < bandCount; i++) {
         const b = currentPreset.bands[i] || { type: "PK", freq: 1000, gain: 0, q: 1.0 };
@@ -2160,10 +2160,10 @@ const DEFAULT_DACS = [
     dac_type: "hardware_dsp",
     flashable: true,
     hardware_bands: 8,
-    vid: 3034, pid: 21586,
+    vid: 13058, pid: 62420,
     resolution: "32-bit / 384 kHz, DSD256",
     output_power: "125mW @ 32Ω",
-    recommendation: "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15 / Realtek bridge).",
+    recommendation: "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15). Physical VID:PID 0x3302:0xF3D4 verified on hardware.",
   },
 ];
 

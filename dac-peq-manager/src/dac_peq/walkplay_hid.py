@@ -207,11 +207,12 @@ KNOWN_WALKPLAY_DEVICES = [
     (0x3302, 0x4353),  # Tanchjim STARGATE II (0x4353)
     (0x0BDA, 0x5452),  # Tanchjim STARGATE II (0x5452 Realtek bridge)
     (0x3302, 0x5452),  # Tanchjim STARGATE II (0x5452 WalkPlay VID)
+    (0x3302, 0xF3D4),  # Tanchjim STARGATE II (0xF3D4 confirmed hardware VID/PID)
 ]
 
 
 class WalkPlayDSPDevice(BaseDSPDevice):
-    """Hardware DSP driver for WalkPlay-chipset DACs (CrinEar Protocol Micro/Max, Truthear KEYX, Tanchjim SPACE Pro)."""
+    """Hardware DSP driver for WalkPlay-chipset DACs (CrinEar Protocol Micro/Max, Truthear KEYX, Tanchjim SPACE Pro, Stargate II)."""
 
     REPORT_ID = 0x4B
     WALKPLAY_VID = 0x3302
@@ -224,7 +225,8 @@ class WalkPlayDSPDevice(BaseDSPDevice):
     TANCHJIM_SPACE_PRO_PIDS = (0x4307, 0x431D)
     TANCHJIM_STARGATE2_PID = 0x4353
     TANCHJIM_STARGATE2_REALTEK_PID = 0x5452
-    TANCHJIM_STARGATE2_PIDS = (0x4353, 0x5452)
+    TANCHJIM_STARGATE2_CONFIRMED_PID = 0xF3D4
+    TANCHJIM_STARGATE2_PIDS = (0x4353, 0x5452, 0xF3D4)
     CMD_READ = 0x81
     CMD_PEQ_RW = 0x09
     CMD_GLOBAL_GAIN = 0x03
@@ -296,7 +298,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
         for i, b in enumerate(bands):
             safety.validate_band(self.architecture_name, i, float(b.get("freq", 1000.0)), float(b.get("gain", 0.0)), float(b.get("q", 1.0)))
 
-        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID, self.TANCHJIM_STARGATE2_REALTEK_PID) else 101
+        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID, self.TANCHJIM_STARGATE2_REALTEK_PID, self.TANCHJIM_STARGATE2_CONFIRMED_PID) else 101
         slot = preset.get("slot_id", default_slot)
         preamp = float(preset.get("preamp", 0.0))
 
@@ -384,7 +386,7 @@ class WalkPlayDSPDevice(BaseDSPDevice):
                     gain_val -= 256
                 preamp = float(gain_val)
 
-        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID, self.TANCHJIM_STARGATE2_REALTEK_PID) else 101
+        default_slot = 1 if self.product_id in (self.TRUTHEAR_KEYX_PID, 0x4307, 0x431D, self.TANCHJIM_STARGATE2_PID, self.TANCHJIM_STARGATE2_REALTEK_PID, self.TANCHJIM_STARGATE2_CONFIRMED_PID) else 101
         return {
             "bands": bands,
             "preamp": preamp,

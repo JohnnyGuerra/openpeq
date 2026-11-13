@@ -44,7 +44,7 @@ These devices store Parametric EQ filters directly into onboard non-volatile mem
 | **DS3** | Fosi Audio | ESS ES9039Q2M + KTMicro | `0x31B2:0x1118` | 8 Bands | Multi | 🟡 | High-power ES9039Q2M dual-output DAC dongle. |
 | **KEYX DSP Cable** | Truthear | WalkPlay Scheme 15 DSP | `0x3302:0x4362` | 8 Bands | Preset 1-4 | 🟡 | Official Truthear 0.78mm 2-pin Type-C DSP cable. WalkPlay Scheme 15 protocol framing ready in CLI and Web Flasher. |
 | **SPACE Pro** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0x4307` | 10 Bands | Multi | 🟢 | Dual CS43131 flagship dongle with 10-band hardware PEQ (WalkPlay Scheme 15). PID confirmed on physical Linux hardware. 2-way readback and permanent NVRAM flashing fully verified in the wild by community tester Toast (confirmed compatible with official Tanchjim mobile app). |
-| **STARGATE II** | Tanchjim | Dual CS43131 + WalkPlay | `0x0BDA:0x5452` / `0x3302:0x5452` | 8 Bands | Multi | 🟢 | Dual CS43131 dongle using WalkPlay Scheme 15 framing (Realtek bridge). Hardware verified by jamesbezek-cmd. |
+| **STARGATE II** | Tanchjim | Dual CS43131 + WalkPlay | `0x3302:0xF3D4` | 8 Bands | Multi | 🟢 | Dual CS43131 dongle using WalkPlay Scheme 15 framing. Hardware verified by jamesbezek-cmd (`0x3302:0xF3D4`). |
 | **DSP Cable - Memory**| ddHiFi | WalkPlay Scheme 15 DSP | `0x3302` | 8 Bands | Preset 1-4 | 🔵 | Audiophile MMCX / 0.78mm 2-pin Type-C DSP cable. |
 | **KA15** | FiiO | Dual CS43198 + SGM8262 | `0x2972:0x0104` | 10 Bands | USER1-3 | 🔵 | 560mW Desktop Mode dongle with color LCD retro cassette display. FiiO framed protocol. |
 

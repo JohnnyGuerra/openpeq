@@ -11,7 +11,7 @@ use dac_peq_core::{
 
 #[wasm_bindgen]
 pub fn wasm_version() -> String {
-    "0.3.1".to_string()
+    "0.3.2".to_string()
 }
 
 #[wasm_bindgen]

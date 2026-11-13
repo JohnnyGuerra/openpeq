@@ -840,8 +840,8 @@ def test_find_dac_in_database_disambiguation():
     const jcally = findDacInDatabase(12722, 273, "JCALLY JM12");
     const allegro = findDacInDatabase(12722, 273, "Kiwi Ears Allegro Mini");
     const fallback = findDacInDatabase(12722, 273, "Unknown Generic Device");
-    const stargateRealtek = findDacInDatabase(0x0bda, 0x5452, "Tanchjim STARGATE II");
-    const stargateUnmatchedVid = findDacInDatabase(0x3302, 0x5452, "Tanchjim STARGATE II");
+    const stargateConfirmed = findDacInDatabase(0x3302, 0xF3D4, "Tanchjim STARGATE II");
+    const stargateUnmatchedVid = findDacInDatabase(0x1234, 0x5678, "Tanchjim STARGATE II");
 
     console.log(JSON.stringify({
       nullDac,
@@ -849,7 +849,7 @@ def test_find_dac_in_database_disambiguation():
       jcallyId: jcally?.id,
       allegroId: allegro?.id,
       fallbackId: fallback?.id,
-      stargateRealtekId: stargateRealtek?.id,
+      stargateConfirmedId: stargateConfirmed?.id,
       stargateUnmatchedVidId: stargateUnmatchedVid?.id || null
     }));
     """
@@ -859,7 +859,7 @@ def test_find_dac_in_database_disambiguation():
     assert res["jcallyId"] == "jcally_jm12"
     assert res["allegroId"] == "allegro_mini"
     assert res["fallbackId"] == "allegro_mini"
-    assert res["stargateRealtekId"] == "tanchjim_stargate_ii"
+    assert res["stargateConfirmedId"] == "tanchjim_stargate_ii"
     # Crucial: Must never falsely assign Space Pro to a Stargate II
     assert res["stargateUnmatchedVidId"] != "tanchjim_space_pro"
 

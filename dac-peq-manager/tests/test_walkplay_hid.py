@@ -26,12 +26,12 @@ def test_tanchjim_space_pro_pids():
 
 
 def test_tanchjim_stargate_ii_pids():
-    """Verify Stargate II PID 0x5452 is recognized as an 8-band WalkPlay device with slot 1."""
-    assert (0x0BDA, 0x5452) in KNOWN_WALKPLAY_DEVICES
+    """Verify Stargate II PID 0xF3D4 is recognized as an 8-band WalkPlay device with slot 1."""
+    assert (0x3302, 0xF3D4) in KNOWN_WALKPLAY_DEVICES
 
-    dev_realtek = get_dsp_device(vendor_id=0x0BDA, product_id=0x5452, use_mock=True)
-    assert isinstance(dev_realtek, WalkPlayDSPDevice)
-    assert dev_realtek.max_bands == 8
+    dev = get_dsp_device(vendor_id=0x3302, product_id=0xF3D4, use_mock=True)
+    assert isinstance(dev, WalkPlayDSPDevice)
+    assert dev.max_bands == 8
 
 
 def test_decode_walkplay_filter_response_with_report_id():

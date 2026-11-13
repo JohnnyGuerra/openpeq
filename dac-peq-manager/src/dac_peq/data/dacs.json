@@ -566,18 +566,18 @@
       "outputs": [
         "3.5mm SE"
       ],
-      "pid": 21586,
-      "pid_hex": "0x5452",
+      "pid": 62420,
+      "pid_hex": "0xF3D4",
       "quirks": [
         "walkplay_scheme15",
         "8_bands",
         "compensate2x"
       ],
-      "recommendation": "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15 / Realtek bridge).",
+      "recommendation": "Compact dual CS43131 dongle with 8-band hardware PEQ (WalkPlay Scheme 15). Physical VID:PID 0x3302:0xF3D4 verified on hardware.",
       "resolution": "32-bit / 384 kHz, DSD256",
       "trrs_mic": true,
-      "vid": 3034,
-      "vid_hex": "0x0BDA"
+      "vid": 13058,
+      "vid_hex": "0x3302"
     },
     {
       "architecture": "walkplay_dsp",
