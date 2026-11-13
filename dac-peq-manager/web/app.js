@@ -53,6 +53,9 @@ import {
   getStockBackup,
   saveStockBackup,
   hasStockBackup,
+  getReportByteLength,
+  selectBestHidDevice,
+  sendSafeHidReport,
 } from "./modules/hid_transport.js";
 
 import {
@@ -917,7 +920,8 @@ async function connectDac() {
     });
 
     if (!devices || devices.length === 0) return;
-    await initializeDevice(devices[0], false);
+    const selected = selectBestHidDevice(devices);
+    await initializeDevice(selected, false);
   } catch (err) {
     console.error("HID connection error:", err);
     showToast(`Connection failed: ${err.message}`);
@@ -952,7 +956,7 @@ async function sendHidReport(reportId, reg, cmd, d0 = 0, d1 = 0, d2 = 0, d3 = 0)
     d0 & 0xff, d1 & 0xff, d2 & 0xff, d3 & 0xff,
   ]);
 
-  await connectedHidDevice.sendReport(reportId, payload);
+  await sendSafeHidReport(connectedHidDevice, reportId, payload);
   await new Promise((r) => setTimeout(r, 12));
 }
 
@@ -1049,7 +1053,7 @@ async function applyToDevice(commitFlash = false) {
         if (isDemoMode) {
           console.log(`[Demo Mode WalkPlay Filter ${i} Tx]:`, pkt);
         } else {
-          await connectedHidDevice.sendReport(0x4b, pkt);
+          await sendSafeHidReport(connectedHidDevice, 0x4b, pkt);
           await new Promise((r) => setTimeout(r, 20));
         }
       }
@@ -1059,7 +1063,7 @@ async function applyToDevice(commitFlash = false) {
       if (isDemoMode) {
         console.log("[Demo Mode WalkPlay Preamp Tx]:", gainPkt);
       } else {
-        await connectedHidDevice.sendReport(0x4b, gainPkt);
+        await sendSafeHidReport(connectedHidDevice, 0x4b, gainPkt);
         await new Promise((r) => setTimeout(r, 30));
       }
 
@@ -1067,7 +1071,7 @@ async function applyToDevice(commitFlash = false) {
         const seq = getWalkplayCommitSequence();
         for (const cmd of seq) {
           if (!isDemoMode) {
-            await connectedHidDevice.sendReport(0x4b, cmd);
+            await sendSafeHidReport(connectedHidDevice, 0x4b, cmd);
             await new Promise((r) => setTimeout(r, 25));
           }
         }
@@ -1086,7 +1090,7 @@ async function applyToDevice(commitFlash = false) {
       if (isDemoMode) {
         console.log("[Demo Mode Moondrop 9-Band Tx] 64-byte frame:", payload);
       } else {
-        await connectedHidDevice.sendReport(0x00, payload);
+        await sendSafeHidReport(connectedHidDevice, 0x00, payload);
       }
       if (commitFlash) {
         const stats = recordFlashCommit(connectedHidDevice);
@@ -2316,15 +2320,29 @@ export function renderDacDirectory(filter = null, query = null) {
 }
 
 // ── Toast Notification ────────────────────────────────────────────────────────
-function showToast(msg) {
+export function showToast(msg, level = "info") {
   const toast = document.getElementById("toast");
   if (!toast) return;
   toast.textContent = msg;
   toast.classList.add("show");
+  if (toast.style) {
+    if (level === "error" || msg.startsWith("Error") || msg.startsWith("Write refused") || msg.startsWith("Flash blocked")) {
+      toast.style.borderColor = "var(--accent-red, #ff5252)";
+      toast.style.boxShadow = "0 8px 32px rgba(255, 82, 82, 0.35)";
+    } else {
+      toast.style.borderColor = "";
+      toast.style.boxShadow = "";
+    }
+  }
   clearTimeout(toast._timer);
+  const duration = (level === "error" || msg.startsWith("Error")) ? 6500 : 3200;
   toast._timer = setTimeout(() => {
     toast.classList.remove("show");
-  }, 3200);
+    if (toast.style) {
+      toast.style.borderColor = "";
+      toast.style.boxShadow = "";
+    }
+  }, duration);
 }
 
 // ── Preset Object Loader ──────────────────────────────────────────────────────
@@ -2952,9 +2970,10 @@ window.addEventListener("DOMContentLoaded", () => {
         .getDevices()
         .then(async (paired) => {
           if (paired && paired.length > 0 && !connectedHidDevice) {
-            const matched = paired.find(
+            const matchedList = paired.filter(
               (d) => KTMICRO_FILTERS.some((f) => f.vendorId === d.vendorId) || Boolean(entryFor(d))
             );
+            const matched = selectBestHidDevice(matchedList);
             if (matched) {
               await initializeDevice(matched, true);
               showToast(`Auto-reconnected to ${matched.productName || "USB DAC"}`);
@@ -2969,7 +2988,16 @@ window.addEventListener("DOMContentLoaded", () => {
     navigator.hid.addEventListener("connect", async (e) => {
       const allowAuto = localStorage.getItem("dac_auto_reconnect") !== "false";
       if (allowAuto && !connectedHidDevice && !isRebootingPostCommit) {
-        await initializeDevice(e.device, false);
+        try {
+          const paired = await navigator.hid.getDevices();
+          const siblings = paired.filter(
+            (d) => d.vendorId === e.device.vendorId && d.productId === e.device.productId
+          );
+          const chosen = selectBestHidDevice(siblings.length > 0 ? siblings : [e.device]);
+          await initializeDevice(chosen, false);
+        } catch {
+          await initializeDevice(e.device, false);
+        }
       }
     });
 

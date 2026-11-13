@@ -24,6 +24,105 @@ export function isWalkplayDsp(dev) {
   return Boolean(entry) && entry.architecture === "walkplay_dsp";
 }
 
+// ── WebHID Report Descriptor Inspection & Safe Dispatch ───────────────────────
+
+/**
+ * Calculate expected report byte length from WebHID collection descriptors.
+ */
+export function getReportByteLength(dev, reportId, reportType = "output") {
+  if (!dev || !dev.collections) return 0;
+  for (const c of dev.collections) {
+    const list =
+      reportType === "feature"
+        ? c.featureReports
+        : reportType === "input"
+        ? c.inputReports
+        : c.outputReports;
+    if (!list) continue;
+    for (const r of list) {
+      if (r.reportId === reportId) {
+        if (!r.items || r.items.length === 0) return 0;
+        let bits = 0;
+        for (const it of r.items) {
+          bits += (it.reportSize || 0) * (it.reportCount || 0);
+        }
+        return Math.ceil(bits / 8);
+      }
+    }
+  }
+  return 0;
+}
+
+/**
+ * When a physical USB DAC exposes multiple top-level HID collections (e.g. Realtek
+ * or KT02H20 exposing Consumer Control buttons on collection 0 and Vendor DSP registers
+ * on collection 1), select the collection with DSP output or feature reports.
+ */
+export function selectBestHidDevice(devices) {
+  if (!devices || devices.length === 0) return null;
+  if (devices.length === 1) return devices[0];
+
+  const dspCandidate = devices.find((d) => {
+    if (!d.collections || d.collections.length === 0) return false;
+    return d.collections.some((c) => {
+      const isVendorPage = (c.usagePage || 0) >= 0xff00;
+      const hasOutputReports = Array.isArray(c.outputReports) && c.outputReports.length > 0;
+      const hasFeatureReports = Array.isArray(c.featureReports) && c.featureReports.length > 0;
+      const has4bOut = (c.outputReports || []).some((r) => r.reportId === 0x4b || r.reportId === 0x00);
+      const has4bFeat = (c.featureReports || []).some((r) => r.reportId === 0x4b || r.reportId === 0x00);
+      return has4bOut || has4bFeat || isVendorPage || hasOutputReports || hasFeatureReports;
+    });
+  });
+
+  return dspCandidate || devices[0];
+}
+
+/**
+ * Dispatch an HID report safely, matching the descriptor's expected byte length by
+ * zero-padding unpadded frames to prevent Chromium's "The buffer is not of the correct size"
+ * DOMException, and falling back gracefully to 64-byte padding or feature reports.
+ */
+export async function sendSafeHidReport(dev, reportId, data) {
+  if (!dev) throw new Error("No device provided.");
+
+  const payload = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const outLen = getReportByteLength(dev, reportId, "output");
+  const featLen = getReportByteLength(dev, reportId, "feature");
+
+  const isFeature = featLen > 0 && outLen === 0;
+  const targetLen = isFeature ? featLen : outLen;
+
+  let outData = payload;
+  if (targetLen > payload.byteLength) {
+    const padded = new Uint8Array(targetLen);
+    padded.set(payload);
+    outData = padded;
+  }
+
+  if (isFeature && typeof dev.sendFeatureReport === "function") {
+    return await dev.sendFeatureReport(reportId, outData);
+  }
+
+  try {
+    return await dev.sendReport(reportId, outData);
+  } catch (err) {
+    // Fallback: If sendReport failed because the descriptor was not inspectable or length mismatched:
+    if (outData.byteLength < 64 && typeof dev.sendReport === "function") {
+      try {
+        const padded64 = new Uint8Array(64);
+        padded64.set(payload);
+        return await dev.sendReport(reportId, padded64);
+      } catch (_) {}
+    }
+    if (typeof dev.sendFeatureReport === "function") {
+      try {
+        return await dev.sendFeatureReport(reportId, outData);
+      } catch (_) {}
+    }
+    throw err;
+  }
+}
+
 // ── NVRAM Flash Wear-Out Health Tracker ───────────────────────────────────────
 export function getFlashWearKey(dev) {
   if (!dev) return "dac_flash_history_generic";
@@ -233,7 +332,8 @@ export function waitForUsbReenumeration(hidApi, filters = KTMICRO_FILTERS, timeo
         try {
           const paired = await hidApi.getDevices();
           if (paired && paired.length > 0) {
-            const matched = paired.find((d) => filters.some((f) => f.vendorId === d.vendorId));
+            const matchedList = paired.filter((d) => filters.some((f) => f.vendorId === d.vendorId));
+            const matched = selectBestHidDevice(matchedList);
             if (matched) {
               cleanup();
               resolve(matched);
@@ -251,7 +351,8 @@ export function waitForUsbReenumeration(hidApi, filters = KTMICRO_FILTERS, timeo
       try {
         const paired = await hidApi.getDevices();
         if (paired && paired.length > 0) {
-          fallbackDevice = paired.find((d) => filters.some((f) => f.vendorId === d.vendorId)) || null;
+          const matchedList = paired.filter((d) => filters.some((f) => f.vendorId === d.vendorId));
+          fallbackDevice = selectBestHidDevice(matchedList);
         }
       } catch {
         // Ignore
@@ -279,7 +380,7 @@ export async function sendKtMicroFilter(dev, filterVal = 1) {
     CMD_WRITE, 0x00,
     filterVal & 0xff, 0x00, 0x00, 0x00,
   ]);
-  return dev.sendReport(REPORT_ID, payload);
+  return sendSafeHidReport(dev, REPORT_ID, payload);
 }
 
 export async function sendKtMicroClearFlash(dev) {
@@ -291,7 +392,7 @@ export async function sendKtMicroClearFlash(dev) {
     CMD_CLEAR, 0x00,
     0x00, 0x00, 0x00, 0x00,
   ]);
-  return dev.sendReport(REPORT_ID, payload);
+  return sendSafeHidReport(dev, REPORT_ID, payload);
 }
 
 export function decodeKtMicroBandRegisters(gfResp, qResp, compensate2X = false) {
@@ -359,7 +460,7 @@ export function readKtMicroRegister(dev, reg, timeoutMs = 500) {
         CMD_READ, 0x00,
         0x00, 0x00, 0x00, 0x00,
       ]);
-      dev.sendReport(REPORT_ID, payload).catch((err) => {
+      sendSafeHidReport(dev, REPORT_ID, payload).catch((err) => {
         cleanup();
         reject(err);
       });
@@ -506,7 +607,7 @@ export function readMoondropReport(dev, timeoutMs = 500) {
       dev.addEventListener("inputreport", onInputReport);
       const req = new Uint8Array(64);
       req[0] = 0x22;
-      dev.sendReport(0x00, req).catch((err) => {
+      sendSafeHidReport(dev, 0x00, req).catch((err) => {
         cleanup();
         reject(err);
       });
@@ -659,7 +760,7 @@ export async function readWalkplayPeq(dev, maxFilters = 8, timeoutMs = 2000) {
   try {
     for (let i = 0; i < maxFilters; i++) {
       const req = new Uint8Array([0x80, 0x09, 0x00, 0x00, i, 0x00]);
-      await dev.sendReport(0x4b, req);
+      await sendSafeHidReport(dev, 0x4b, req);
       await new Promise((r) => setTimeout(r, 40));
     }
 
@@ -711,7 +812,7 @@ export function readWalkplayGlobalGain(dev, timeoutMs = 500) {
 
     try {
       dev.addEventListener("inputreport", onReport);
-      dev.sendReport(0x4b, new Uint8Array([0x80, 0x03, 0x00])).catch((err) => {
+      sendSafeHidReport(dev, 0x4b, new Uint8Array([0x80, 0x03, 0x00])).catch((err) => {
         cleanup();
         reject(err);
       });

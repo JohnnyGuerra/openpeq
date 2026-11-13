@@ -2,7 +2,7 @@
   "name": "dac-peq-wasm",
   "type": "module",
   "description": "WebAssembly bindings for DAC PEQ Manager",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "repository": {
     "type": "git",

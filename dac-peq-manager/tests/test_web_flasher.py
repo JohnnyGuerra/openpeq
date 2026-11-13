@@ -1158,3 +1158,96 @@ def test_browser_resolves_identity_only_from_the_shared_table():
     assert res["knownEntryName"] == "Kiwi Ears Allegro Mini"
     assert res["knownNeeds2X"] is True
     assert "SAFETY GUARD" in res["rangesErr"]
+
+
+def test_get_report_byte_length_and_send_safe_hid_report_padding():
+    """Verify getReportByteLength correctly calculates lengths from collections and sendSafeHidReport auto-pads."""
+    js_code = """
+    import { getReportByteLength, sendSafeHidReport } from "./modules/hid_transport.js";
+
+    // Mock device with 64-byte output report (8 bits x 64 count)
+    const writtenReports = [];
+    const mockDev = {
+      collections: [
+        {
+          usagePage: 0xffa0,
+          outputReports: [
+            {
+              reportId: 0x4b,
+              items: [{ reportSize: 8, reportCount: 64 }]
+            }
+          ]
+        }
+      ],
+      sendReport: async (id, data) => {
+        writtenReports.push({ id, length: data.byteLength, firstByte: data[0], lastByte: data[data.byteLength - 1] });
+      }
+    };
+
+    const len = getReportByteLength(mockDev, 0x4b, "output");
+
+    // Send a 37-byte WalkPlay filter packet
+    const unpaddedFilter = new Uint8Array(37);
+    unpaddedFilter[0] = 0x01;
+    unpaddedFilter[1] = 0x09;
+    unpaddedFilter[36] = 0xee; // marker
+
+    await sendSafeHidReport(mockDev, 0x4b, unpaddedFilter);
+
+    console.log(JSON.stringify({
+      calculatedLength: len,
+      writtenReports
+    }));
+    """
+    res = run_node_eval(js_code)
+    assert res["calculatedLength"] == 64
+    assert len(res["writtenReports"]) == 1
+    report = res["writtenReports"][0]
+    assert report["id"] == 0x4B
+    assert report["length"] == 64, "sendSafeHidReport must pad 37-byte buffer to 64 bytes"
+    assert report["firstByte"] == 0x01
+    assert report["lastByte"] == 0x00, "padded tail must be zeros"
+
+
+def test_select_best_hid_device_prefers_dsp_collection():
+    """Verify selectBestHidDevice prioritizes vendor DSP collections over Consumer Control."""
+    js_code = """
+    import { selectBestHidDevice } from "./modules/hid_transport.js";
+
+    // Collection 0: Consumer Control (Volume / Media Keys) - NO output reports
+    const consumerDev = {
+      vendorId: 0x0bda,
+      productId: 0x5452,
+      productName: "STARGATE II",
+      collections: [
+        {
+          usagePage: 0x000c, // Consumer
+          usage: 0x0001,
+          inputReports: [{ reportId: 0x01, items: [{ reportSize: 8, reportCount: 3 }] }],
+          outputReports: []
+        }
+      ]
+    };
+
+    // Collection 1: Vendor DSP - Output Report 0x4B
+    const dspDev = {
+      vendorId: 0x0bda,
+      productId: 0x5452,
+      productName: "STARGATE II",
+      collections: [
+        {
+          usagePage: 0xff00, // Vendor Defined
+          outputReports: [{ reportId: 0x4b, items: [{ reportSize: 8, reportCount: 64 }] }]
+        }
+      ]
+    };
+
+    const picked = selectBestHidDevice([consumerDev, dspDev]);
+
+    console.log(JSON.stringify({
+      isDspDev: picked === dspDev
+    }));
+    """
+    res = run_node_eval(js_code)
+    assert res["isDspDev"] is True, "Must choose DSP collection over consumer control collection"
+

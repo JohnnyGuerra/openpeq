@@ -22,7 +22,7 @@ export async function initWasmEngine() {
     wasmReady = true;
     // Rust cannot read a file in the browser, so hand it the same table the JS guard uses.
     wasmImport.set_device_table(JSON.stringify(await loadTable("dacs.json")));
-    const version = typeof wasmImport.wasm_version === "function" ? wasmImport.wasm_version() : "0.3.0";
+    const version = typeof wasmImport.wasm_version === "function" ? wasmImport.wasm_version() : "0.3.1";
     console.log(`%c[WASM Engine] Rust Core v${version} active`, "color: #10b981; font-weight: bold;");
     return true;
   } catch (err) {
